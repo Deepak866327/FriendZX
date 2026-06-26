@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum Visibility {
+  PUBLIC
+  FRIENDS
+  NEARBY
+  PRIVATE
+}
+
+model Media {
+  id               String           @id @default(uuid())
+  userId           String
+  mediaType        MediaType
+  originalUrl      String
+  optimizedUrl     String?
+  thumbnailUrl     String?
+  width            Int?
+  height           Int?
+  aspectRatio      Float?
+  duration         Float?
+  mimeType         String
+  fileSize         Int
+  processingStatus ProcessingStatus @default(PENDING)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  postMedia PostMedia[]
+
+  @@index([userId])
+  @@index([processingStatus])
+  @@map("media")
+}
+
+model Post {
+  id         String     @id @default(uuid())
+  userId     String
+  caption    String?
+  visibility Visibility @default(PUBLIC)
+  latitude   Float?
+  longitude  Float?
+  likesCount Int        @default(0)
+  likes      String[]   @default([])
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  postMedia PostMedia[]
+
+  @@index([userId])
+  @@index([visibility, createdAt(sort: Desc)])
+  @@map("posts")
+}
+
+model PostMedia {
+  id      String @id @default(uuid())
+  postId  String
+  mediaId String
+  order   Int    @default(0)
+
+  post  Post  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  media Media @relation(fields: [mediaId], references: [id])
+
+  @@unique([postId, mediaId])
+  @@index([postId])
+  @@map("post_media")
+}

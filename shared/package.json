@@ -1,0 +1,10 @@
+{
+  "name": "shared",
+  "version": "1.0.0",
+  "description": "Shared utilities for Location Matcher services",
+  "dependencies": {
+    "ioredis": "^5.3.2",
+    "kafkajs": "^2.2.4",
+    "winston": "^3.11.0"
+  }
+}

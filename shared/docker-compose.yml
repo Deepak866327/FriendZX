@@ -1,0 +1,434 @@
+services:
+  # ============ DATABASES ============
+
+  # PostgreSQL for Auth Service
+  postgres-auth:
+    image: postgres:15-alpine
+    container_name: postgres-auth
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_password
+    volumes:
+      - postgres-auth-data:/var/lib/postgresql/data
+      - ../services/auth-service/src/infrastructure/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - microservices-network
+
+  # PostgreSQL for User Service
+  postgres-user:
+    image: postgres:15-alpine
+    container_name: postgres-user
+    environment:
+      POSTGRES_DB: user_db
+      POSTGRES_USER: user_user
+      POSTGRES_PASSWORD: user_password
+    volumes:
+      - postgres-user-data:/var/lib/postgresql/data
+      - ../services/user-service/src/infrastructure/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user_user -d user_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - microservices-network
+
+  # PostgreSQL for Post Service
+  postgres-post:
+    image: postgres:15-alpine
+    container_name: postgres-post
+    environment:
+      POSTGRES_DB: post_db
+      POSTGRES_USER: post_user
+      POSTGRES_PASSWORD: post_password
+    volumes:
+      - postgres-post-data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U post_user -d post_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - microservices-network
+
+  # MongoDB for Location Service
+  mongodb:
+    image: mongo:7.0
+    container_name: mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+    volumes:
+      - mongodb-data:/data/db
+      - ../services/location-service/src/infrastructure/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - microservices-network
+
+  # Redis for Caching & Sessions
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - microservices-network
+
+  # Redis Geo for Location Data
+  redis-geo:
+    image: redis:7-alpine
+    container_name: redis-geo
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-geo-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - microservices-network
+
+  # ============ MESSAGE QUEUE ============
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/2181"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - microservices-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    networks:
+      - microservices-network
+
+  # ============ MICROSERVICES ============
+
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: api-gateway/Dockerfile
+    container_name: api-gateway
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      AUTH_SERVICE_URL: http://auth-service:3001
+      USER_SERVICE_URL: http://user-service:3002
+      LOCATION_SERVICE_URL: http://location-service:3003
+      NOTIFICATION_SERVICE_URL: http://notification-service:3004
+      BLUETOOTH_SERVICE_URL: http://location-service:3003
+      POST_SERVICE_URL: http://post-service:3006
+      RANDOM_CONNECT_SERVICE_URL: http://random-connect-service:3007
+      CHALLENGE_SERVICE_URL: http://challenge-service:3008
+      JWT_SECRET: ${JWT_SECRET:-your_super_secret_jwt_key_change_this_in_production}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:5173}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-100}
+    ports:
+      - "3000:3000"
+    depends_on:
+      auth-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      location-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+      post-service:
+        condition: service_started
+      random-connect-service:
+        condition: service_started
+      challenge-service:
+        condition: service_started
+    networks:
+      - microservices-network
+
+  # ── Frontend (nginx serving built React app) ──────────────────
+  frontend:
+    image: nginx:alpine
+    container_name: frontend
+    volumes:
+      - ../frontend/dist:/usr/share/nginx/html:ro
+      - ../nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+  auth-service:
+    build:
+      context: ..
+      dockerfile: services/auth-service/Dockerfile
+    container_name: auth-service
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3001
+      DATABASE_URL: postgresql://auth_user:auth_password@postgres-auth:5432/auth_db
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET:-your_super_secret_jwt_key_change_this_in_production}
+      JWT_EXPIRY: ${JWT_EXPIRY:-24h}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your_super_secret_refresh_key_change_this}
+      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-7d}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-http://localhost:3000/api/auth/google/callback}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      SESSION_SECRET: ${SESSION_SECRET:-oauth-session-secret-change-in-prod}
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+  user-service:
+    build:
+      context: ..
+      dockerfile: services/user-service/Dockerfile
+    container_name: user-service
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3002
+      USER_DATABASE_URL: postgresql://user_user:user_password@postgres-user:5432/user_db
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:29092
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+    ports:
+      - "3002:3002"
+    depends_on:
+      postgres-user:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+  location-service:
+    build:
+      context: ..
+      dockerfile: services/location-service/Dockerfile
+    container_name: location-service
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3003
+      MONGODB_URL: mongodb://root:password@mongodb:27017/location_db?authSource=admin
+      REDIS_GEO_URL: redis://redis-geo:6379
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:29092
+      OLA_MAPS_API_KEY: ${OLA_MAPS_API_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      # Bluetooth (merged from bluetooth-service)
+      BT_MAX_RADIUS_M: 200
+      BT_DEFAULT_RADIUS_M: 50
+      BT_PRESENCE_TTL_S: 45
+    ports:
+      - "3003:3003"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis-geo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+  notification-service:
+    build:
+      context: ..
+      dockerfile: services/notification-service/Dockerfile
+    container_name: notification-service
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3004
+      KAFKA_BROKERS: kafka:29092
+      REDIS_URL: redis://redis:6379
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+    ports:
+      - "3004:3004"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+  post-service:
+    build:
+      context: ..
+      dockerfile: services/post-service/Dockerfile
+    container_name: post-service
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3006
+      DATABASE_URL: postgresql://post_user:post_password@postgres-post:5432/post_db
+      MONGODB_URL: mongodb://root:password@mongodb:27017/posts_db?authSource=admin
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:29092
+      USER_SERVICE_URL: http://user-service:3002
+      UPLOADS_DIR: /app/uploads
+      # AWS S3 (leave empty to use local disk storage in dev)
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-freindz-media}
+      CDN_BASE_URL: ${CDN_BASE_URL:-}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+    volumes:
+      - post-uploads:/app/uploads
+    ports:
+      - "3006:3006"
+    depends_on:
+      postgres-post:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+  random-connect-service:
+    build:
+      context: ..
+      dockerfile: services/random-connect-service/Dockerfile
+    container_name: random-connect-service
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3007
+      REDIS_URL: redis://redis:6379
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+    ports:
+      - "3007:3007"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+  challenge-service:
+    build:
+      context: ..
+      dockerfile: services/challenge-service/Dockerfile
+    container_name: challenge-service
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3008
+      MONGODB_URL: mongodb://root:password@mongodb:27017/challenges_db?authSource=admin
+      KAFKA_BROKERS: kafka:29092
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+    ports:
+      - "3008:3008"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+volumes:
+  postgres-auth-data:
+  postgres-user-data:
+  postgres-post-data:
+  mongodb-data:
+  redis-data:
+  redis-geo-data:
+  post-uploads:
+
+networks:
+  microservices-network:
+    driver: bridge

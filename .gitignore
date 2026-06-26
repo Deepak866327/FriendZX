@@ -1,0 +1,117 @@
+# =========================
+# Dependencies
+# =========================
+node_modules/
+**/node_modules/
+# Explicit per-package ignores to prevent accidental tracking
+/api-gateway/node_modules/
+/frontend/node_modules/
+
+# =========================
+# Build Output
+# =========================
+dist/
+build/
+out/
+coverage/
+.next/
+.nuxt/
+.vite/
+.cache/
+**/dist/
+**/build/
+
+# =========================
+# Environment Variables
+# =========================
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Ignore nested logs and log files in subfolders
+**/logs/
+**/*.log
+
+# Ignore coverage folders anywhere in the repo
+**/coverage/
+
+# =========================
+# Runtime Files
+# =========================
+*.pid
+*.seed
+*.pid.lock
+
+# =========================
+# TypeScript
+# =========================
+*.tsbuildinfo
+
+# =========================
+# Testing
+# =========================
+coverage/
+.nyc_output/
+
+# =========================
+# IDE
+# =========================
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Docker
+# =========================
+docker-data/
+docker-volumes/
+
+# =========================
+# Temporary Files
+# =========================
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+
+# =========================
+# Package Managers
+# =========================
+.pnpm-store/
+.npm/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# =========================
+# Misc
+# =========================
+*.bak
+*.orig
