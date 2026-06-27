@@ -1,7 +1,10 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { Eye, EyeOff, CheckCircle, XCircle, Loader, Mail, Phone } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle, XCircle, Loader, Mail, Phone, AlertCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { authService } from '@/services/authService';
+import { OtpInput } from '@/components/Common/OtpInput';
+import { pageVariants } from '@/utils/animations';
 
 const USERNAME_RE = /^[a-zA-Z][a-zA-Z0-9_]{2,19}$/;
 const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -25,14 +28,14 @@ interface RegisterFormProps {
 export const RegisterForm: React.FC<RegisterFormProps> = ({ onGoogleAuth }) => {
   const { register, isLoading, error } = useAuth();
 
-  const [step, setStep]               = useState<Step>('form');
-  const [firstName, setFirstName]     = useState('');
-  const [lastName, setLastName]       = useState('');
-  const [username, setUsername]       = useState('');
-  const [password, setPassword]       = useState('');
-  const [showPass, setShowPass]       = useState(false);
-  const [identifier, setIdentifier]   = useState('');
-  const [otp, setOtp]                 = useState('');
+  const [step, setStep]             = useState<Step>('form');
+  const [firstName, setFirstName]   = useState('');
+  const [lastName, setLastName]     = useState('');
+  const [username, setUsername]     = useState('');
+  const [password, setPassword]     = useState('');
+  const [showPass, setShowPass]     = useState(false);
+  const [identifier, setIdentifier] = useState('');
+  const [otp, setOtp]               = useState('');
 
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
   const usernameDebounce = useRef<ReturnType<typeof setTimeout>>();
@@ -45,7 +48,6 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onGoogleAuth }) => {
   const isEmail = EMAIL_RE.test(identifier.trim());
   const isPhone = !isEmail && PHONE_RE.test(identifier.trim().replace(/\s/g, ''));
 
-  // ── Username availability check ────────────────────────────────────────────
   const handleUsernameChange = useCallback((val: string) => {
     setUsername(val);
     setUsernameStatus('idle');
@@ -77,7 +79,6 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onGoogleAuth }) => {
     return null;
   };
 
-  // ── OTP helpers ─────────────────────────────────────────────────────────────
   const startCooldown = () => {
     setResendCooldown(60);
     if (cooldownRef.current) clearInterval(cooldownRef.current);
@@ -96,7 +97,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onGoogleAuth }) => {
     if (usernameStatus === 'taken')  return setFormError('Username is already taken');
     if (password.length < 6)        return setFormError('Password must be at least 6 characters');
     if (!identifier.trim())         return setFormError('Email or mobile number is required');
-    if (isPhone) return setFormError('SMS verification is coming soon. Please use your email address for now.');
+    if (isPhone) return setFormError('SMS verification coming soon — please use email for now.');
     if (!isEmail) return setFormError('Enter a valid email address or mobile number');
 
     setSendingOtp(true);
@@ -138,81 +139,142 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onGoogleAuth }) => {
 
   const displayErr = formError || error || '';
 
+  // ── Step progress indicator ─────────────────────────────────────────────────
+  const StepDots = () => (
+    <div className="flex items-center gap-2 mb-5">
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div
+          className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+          style={
+            step === 'otp'
+              ? { background: 'linear-gradient(135deg,#10b981,#059669)', color: 'white' }
+              : { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white' }
+          }
+        >
+          {step === 'otp' ? '✓' : '1'}
+        </div>
+        <span className="text-xs font-medium text-slate-600">Details</span>
+      </div>
+
+      <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, #6366f1, #e5e7eb)' }} />
+
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div
+          className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+          style={
+            step === 'otp'
+              ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white' }
+              : { background: '#e5e7eb', color: '#94a3b8' }
+          }
+        >
+          2
+        </div>
+        <span className={`text-xs font-medium ${step === 'otp' ? 'text-slate-600' : 'text-slate-400'}`}>Verify</span>
+      </div>
+    </div>
+  );
+
   // ── Step 2: OTP verification ────────────────────────────────────────────────
-  if (step === 'otp') {
-    return (
-      <form onSubmit={handleVerify} className="flex flex-col gap-4">
-        {/* Header */}
-        <div className="flex flex-col items-center text-center gap-1 pb-1">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-glass mb-1">
-            <Mail size={22} />
-          </div>
-          <p className="font-semibold text-slate-800">Check your email</p>
-          <p className="text-sm text-slate-400">
-            We sent a 6-digit code to{' '}
-            <span className="font-semibold text-slate-600">{identifier.trim()}</span>
-          </p>
-        </div>
+  const OtpStep = (
+    <motion.form
+      key="otp"
+      onSubmit={handleVerify}
+      className="flex flex-col gap-4"
+      variants={pageVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+    >
+      <StepDots />
 
-        {/* OTP field */}
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="otp" className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-            Verification code
-          </label>
-          <input
-            id="otp"
-            type="text"
-            inputMode="numeric"
-            maxLength={6}
-            value={otp}
-            onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            placeholder="000000"
-            autoComplete="one-time-code"
-            className="input-glass text-center text-2xl font-bold tracking-[0.5em]"
-          />
-        </div>
+      {/* Header */}
+      <div className="flex flex-col items-center text-center gap-1 pb-1">
+        <motion.div
+          className="w-14 h-14 rounded-2xl flex items-center justify-center text-white mb-1"
+          style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', damping: 22, stiffness: 360 }}
+        >
+          <Mail size={24} />
+        </motion.div>
+        <p className="font-semibold text-slate-800 text-base">Check your email</p>
+        <p className="text-sm text-slate-400">
+          We sent a 6-digit code to{' '}
+          <span className="font-semibold text-slate-600 break-all">{identifier.trim()}</span>
+        </p>
+      </div>
 
+      {/* 6-box OTP */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide text-center">
+          Verification code
+        </label>
+        <OtpInput value={otp} onChange={setOtp} />
+      </div>
+
+      <AnimatePresence>
         {displayErr && (
-          <div className="rounded-xl bg-red-50 border border-red-200/60 px-4 py-3 text-sm text-red-600">
-            {displayErr}
-          </div>
+          <motion.div
+            className="rounded-xl px-4 py-3 text-sm text-red-600 flex items-start gap-2"
+            style={{ background: 'rgba(254,242,242,0.9)', border: '1px solid rgba(252,165,165,0.5)' }}
+            initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.15 }}
+          >
+            <AlertCircle size={14} className="flex-shrink-0 mt-0.5 text-red-400" />
+            <span>{displayErr}</span>
+          </motion.div>
         )}
+      </AnimatePresence>
 
-        <button type="submit" disabled={isLoading || otp.length < 6} className="btn-primary w-full">
-          {isLoading ? (
-            <span className="flex items-center gap-2">
-              <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="32" strokeDashoffset="8" />
-              </svg>
-              Creating account…
-            </span>
-          ) : 'Verify & Create Account'}
+      <motion.button
+        type="submit"
+        disabled={isLoading || otp.length < 6}
+        className="btn-primary w-full"
+        whileTap={{ scale: 0.97 }}
+        transition={{ type: 'spring', damping: 20, stiffness: 400 }}
+      >
+        {isLoading ? (
+          <span className="flex items-center gap-2">
+            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="32" strokeDashoffset="8" />
+            </svg>
+            Creating account…
+          </span>
+        ) : 'Verify & Create Account'}
+      </motion.button>
+
+      <div className="flex items-center justify-center gap-6 text-sm">
+        <button
+          type="button"
+          onClick={() => { setStep('form'); setFormError(''); setOtp(''); }}
+          className="text-slate-400 hover:text-slate-600 transition-colors"
+        >
+          ← Back
         </button>
+        <button
+          type="button"
+          onClick={handleResend}
+          disabled={resendCooldown > 0 || sendingOtp}
+          className="font-semibold text-indigo-500 hover:text-indigo-700 disabled:text-slate-400 disabled:cursor-default transition-colors"
+        >
+          {sendingOtp ? 'Sending…' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
+        </button>
+      </div>
+    </motion.form>
+  );
 
-        <div className="flex items-center justify-center gap-6 text-sm">
-          <button
-            type="button"
-            onClick={() => { setStep('form'); setFormError(''); setOtp(''); }}
-            className="text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            ← Back
-          </button>
-          <button
-            type="button"
-            onClick={handleResend}
-            disabled={resendCooldown > 0 || sendingOtp}
-            className="font-semibold text-indigo-500 hover:text-indigo-700 disabled:text-slate-400 disabled:cursor-default transition-colors"
-          >
-            {sendingOtp ? 'Sending…' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
-          </button>
-        </div>
-      </form>
-    );
-  }
-
-  // ── Step 1: Registration form ────────────────────────────────────────────────
-  return (
-    <div className="flex flex-col gap-4">
+  // ── Step 1: Registration form ───────────────────────────────────────────────
+  const FormStep = (
+    <motion.div
+      key="form"
+      className="flex flex-col gap-4"
+      variants={pageVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+    >
+      <StepDots />
 
       {/* Name row */}
       <div className="grid grid-cols-2 gap-3">
@@ -326,18 +388,27 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onGoogleAuth }) => {
         </div>
       </div>
 
-      {/* Error */}
-      {displayErr && (
-        <div className="rounded-xl bg-red-50 border border-red-200/60 px-4 py-3 text-sm text-red-600">
-          {displayErr}
-        </div>
-      )}
+      <AnimatePresence>
+        {displayErr && (
+          <motion.div
+            className="rounded-xl px-4 py-3 text-sm text-red-600 flex items-start gap-2"
+            style={{ background: 'rgba(254,242,242,0.9)', border: '1px solid rgba(252,165,165,0.5)' }}
+            initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.15 }}
+          >
+            <AlertCircle size={14} className="flex-shrink-0 mt-0.5 text-red-400" />
+            <span>{displayErr}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <button
+      <motion.button
         type="button"
         disabled={sendingOtp || !firstName || !username || !password || !identifier}
         onClick={handleSendOtp}
         className="btn-primary w-full mt-1"
+        whileTap={{ scale: 0.97 }}
+        transition={{ type: 'spring', damping: 20, stiffness: 400 }}
       >
         {sendingOtp ? (
           <span className="flex items-center gap-2">
@@ -347,23 +418,31 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onGoogleAuth }) => {
             Sending OTP…
           </span>
         ) : 'Send Verification Code →'}
-      </button>
+      </motion.button>
 
-      {/* Google auth — only on step 1 */}
       {onGoogleAuth && (
         <>
           <div className="divider">OR</div>
-          <button
+          <motion.button
             type="button"
             onClick={onGoogleAuth}
-            className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl bg-white border border-slate-200/80 text-slate-700 font-semibold text-sm shadow-sm transition-all duration-200 hover:bg-slate-50 hover:shadow-md active:scale-95"
-            style={{ minHeight: 44 }}
+            className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-2xl glass text-slate-700 font-semibold text-sm"
+            style={{ minHeight: 46 }}
+            whileHover={{ scale: 1.015, boxShadow: '0 4px 16px rgba(0,0,0,0.10)' }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 400 }}
           >
             <GoogleIcon />
             Continue with Google
-          </button>
+          </motion.button>
         </>
       )}
-    </div>
+    </motion.div>
+  );
+
+  return (
+    <AnimatePresence mode="wait">
+      {step === 'otp' ? OtpStep : FormStep}
+    </AnimatePresence>
   );
 };

@@ -11,7 +11,7 @@ import { SkeletonCard } from '@/components/Posts/SkeletonCard';
 import { CrationCard } from '@/components/Cration/CrationCard';
 import { CrationPlayerModal } from '@/components/Cration/CrationPlayerModal';
 import { ChatModal } from '@/components/Chat/ChatModal';
-import { overlayVariants, sheetVariants, staggerListVariants, staggerItemVariants } from '@/utils/animations';
+import { overlayVariants, sheetVariants, staggerListVariants, staggerItemVariants, springTransition } from '@/utils/animations';
 
 type Tab = 'posts' | 'crations';
 
@@ -288,15 +288,23 @@ export const UserProfileModal: React.FC<Props> = ({ userId, onClose }) => {
                           <button
                             key={key}
                             onClick={() => setTab(key)}
-                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                              tab === key
-                                ? 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-sm'
-                                : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
-                            }`}
-                            style={{ minHeight: 34 }}
+                            className="relative flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold z-10 transition-colors duration-200"
+                            style={{ minHeight: 34, color: tab === key ? 'white' : undefined }}
                           >
-                            <Icon size={12} />
-                            {label}
+                            {tab === key && (
+                              <motion.div
+                                layoutId="upm-tab-bg"
+                                className="absolute inset-0 rounded-lg"
+                                style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', zIndex: -1 }}
+                                transition={springTransition}
+                              />
+                            )}
+                            <span className={tab === key ? 'text-white' : 'text-slate-500'}>
+                              <Icon size={12} />
+                            </span>
+                            <span className={tab === key ? 'text-white' : 'text-slate-500'}>
+                              {label}
+                            </span>
                           </button>
                         ))}
                       </div>

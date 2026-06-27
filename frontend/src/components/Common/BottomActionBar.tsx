@@ -18,13 +18,14 @@ import { VideoRoom } from '@/services/videoRoomService';
 
 const ALLOWED_ROUTES = ['/dashboard', '/profile'];
 
-/* ── Shared animated bottom-sheet wrapper ── */
+/* ── Bottom sheet wrapper ────────────────────────────────────────────── */
 const Sheet: React.FC<{
   onClose: () => void;
   icon: React.ReactNode;
   title: string;
+  gradient?: string;
   children: React.ReactNode;
-}> = ({ onClose, icon, title, children }) => {
+}> = ({ onClose, icon, title, gradient = 'linear-gradient(135deg,#6366f1,#8b5cf6)', children }) => {
   const [open, setOpen] = useState(true);
   const handleClose = () => setOpen(false);
 
@@ -37,9 +38,11 @@ const Sheet: React.FC<{
           animate="visible"
           exit="exit"
           className="fixed inset-0 z-50"
-          style={{ background: 'rgba(15,10,40,0.45)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+          style={{ backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
           onClick={handleClose}
         >
+          <div className="absolute inset-0 bg-[#0f0a28]/40" />
+
           <motion.div
             variants={sheetVariants}
             initial="hidden"
@@ -48,26 +51,31 @@ const Sheet: React.FC<{
             className="absolute bottom-0 left-0 right-0 glass-strong rounded-t-3xl max-h-[88dvh] flex flex-col overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
-            {/* Handle */}
+            {/* Drag handle */}
             <div className="w-10 h-1 rounded-full bg-slate-300/70 mx-auto mt-3 mb-1 flex-shrink-0" />
+
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-3 border-b border-white/40 flex-shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+                <div
+                  className="w-8 h-8 rounded-xl flex items-center justify-center text-white flex-shrink-0"
+                  style={{ background: gradient }}
+                >
                   {icon}
                 </div>
                 <h3 className="text-sm font-bold text-slate-800">{title}</h3>
               </div>
               <button
                 onClick={handleClose}
-                className="btn-icon w-8 h-8 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100/60"
+                className="btn-icon w-8 h-8 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100/60"
                 aria-label="Close"
               >
                 <X size={15} />
               </button>
             </div>
+
             {/* Body */}
-            <div className="overflow-y-auto flex-1 p-4 scrollbar-none pb-safe flex flex-col gap-4">
+            <div className="overflow-y-auto flex-1 p-4 pb-safe flex flex-col gap-4" style={{ scrollbarWidth: 'none' }}>
               {children}
             </div>
           </motion.div>
@@ -77,34 +85,59 @@ const Sheet: React.FC<{
   );
 };
 
-/* ── Single bar button ── */
+/* ── Floating pill button ────────────────────────────────────────────── */
 const BarBtn: React.FC<{
   icon: React.ReactNode;
   label: string;
   active?: boolean;
-  dot?: boolean;
   onClick: () => void;
-}> = ({ icon, label, active, dot, onClick }) => (
-  <button
+}> = ({ icon, label, active, onClick }) => (
+  <motion.button
     onClick={onClick}
-    className="flex flex-col items-center justify-center gap-0.5 flex-1 py-2 relative"
-    style={{ minHeight: 56 }}
+    className="relative flex flex-col items-center justify-center gap-0.5 px-3.5 py-2"
+    style={{ minWidth: 56 }}
+    whileTap={{ scale: 0.82 }}
+    transition={{ type: 'spring', damping: 18, stiffness: 420 }}
+    aria-label={label}
   >
-    <div className={`w-6 h-6 flex items-center justify-center transition-colors duration-200 ${active ? 'text-indigo-600' : 'text-slate-400'}`}>
+    {/* Active glow background */}
+    <AnimatePresence>
+      {active && (
+        <motion.div
+          className="absolute inset-0 rounded-2xl"
+          style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.13),rgba(139,92,246,0.13))' }}
+          initial={{ opacity: 0, scale: 0.6 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.6 }}
+          transition={{ duration: 0.18 }}
+        />
+      )}
+    </AnimatePresence>
+
+    <div className={`relative z-10 transition-colors duration-200 ${active ? 'text-indigo-600' : 'text-slate-500'}`}>
       {icon}
     </div>
-    <span className={`text-[9px] font-semibold tracking-wide transition-colors duration-200 ${active ? 'text-indigo-600' : 'text-slate-400'}`}>
+    <span className={`relative z-10 text-[9px] font-semibold tracking-wide transition-colors duration-200 ${active ? 'text-indigo-600' : 'text-slate-400'}`}>
       {label}
     </span>
-    {dot && (
-      <span
-        className="absolute top-1.5 w-1.5 h-1.5 rounded-full"
-        style={{ right: 'calc(50% - 14px)', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}
-      />
-    )}
-  </button>
+
+    {/* Active dot */}
+    <AnimatePresence>
+      {active && (
+        <motion.div
+          className="absolute bottom-1 w-1 h-1 rounded-full"
+          style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
+          transition={{ type: 'spring', damping: 20, stiffness: 400 }}
+        />
+      )}
+    </AnimatePresence>
+  </motion.button>
 );
 
+/* ── Main component ──────────────────────────────────────────────────── */
 export const BottomActionBar: React.FC = () => {
   const routerLocation    = useRouterLocation();
   const navigate          = useNavigate();
@@ -138,23 +171,34 @@ export const BottomActionBar: React.FC = () => {
 
   return (
     <>
-      {/* ── Bar ── */}
+      {/* ── Floating pill bar ── */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-30 glass-nav border-t border-white/30 pb-safe"
+        className="fixed left-0 right-0 z-30 flex justify-center pointer-events-none"
+        style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 10px)' }}
       >
-        <div className="max-w-md mx-auto flex items-stretch justify-around">
+        <motion.div
+          className="pointer-events-auto flex items-center rounded-2xl"
+          style={{
+            background: 'rgba(255,255,255,0.82)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            border: '1px solid rgba(255,255,255,0.60)',
+            boxShadow: '0 8px 32px rgba(99,102,241,0.16), 0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.70)',
+          }}
+          initial={{ y: 80, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ type: 'spring', damping: 26, stiffness: 280, delay: 0.1 }}
+        >
           <BarBtn
             icon={<MapPin size={19} />}
             label="Location"
             active={isTracking}
-            dot={isTracking}
             onClick={() => setShowLocationSheet(true)}
           />
           <BarBtn
             icon={<Bluetooth size={19} />}
             label="Nearby"
             active={isDiscovering}
-            dot={isDiscovering}
             onClick={() => setShowBtSheet(true)}
           />
           <BarBtn
@@ -171,18 +215,18 @@ export const BottomActionBar: React.FC = () => {
             icon={<Shuffle size={19} />}
             label="Connect"
             active={!!(activeRoom || showRandomConnect)}
-            dot={!!(activeRoom || showRandomConnect)}
             onClick={() => setShowRCPicker(true)}
           />
-        </div>
+        </motion.div>
       </div>
 
       {/* ── Location sheet ── */}
       {showLocationSheet && (
         <Sheet
           onClose={() => setShowLocationSheet(false)}
-          icon={<MapPin size={14} className="text-indigo-500" />}
+          icon={<MapPin size={15} />}
           title="Location Tracking"
+          gradient="linear-gradient(135deg,#6366f1,#8b5cf6)"
         >
           <LocationTracker />
           <NearbyUsers />
@@ -193,8 +237,9 @@ export const BottomActionBar: React.FC = () => {
       {showBtSheet && (
         <Sheet
           onClose={() => setShowBtSheet(false)}
-          icon={<Bluetooth size={14} className="text-indigo-500" />}
+          icon={<Bluetooth size={15} />}
           title="Bluetooth Discovery"
+          gradient="linear-gradient(135deg,#38bdf8,#0ea5e9)"
         >
           <BluetoothDiscovery />
         </Sheet>
@@ -203,69 +248,84 @@ export const BottomActionBar: React.FC = () => {
       {/* ── Random Connect picker ── */}
       <AnimatePresence>
         {showRCPicker && (
-        <motion.div
-          variants={overlayVariants}
-          initial="hidden"
-          animate="visible"
-          exit="exit"
-          className="fixed inset-0 z-50 flex items-center justify-center p-6"
-          style={{ background: 'rgba(15,10,40,0.55)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
-          onClick={() => setShowRCPicker(false)}
-        >
           <motion.div
-            variants={modalVariants}
+            variants={overlayVariants}
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="glass-strong w-full max-w-sm rounded-3xl overflow-hidden"
-            onClick={e => e.stopPropagation()}
+            className="fixed inset-0 z-50 flex items-center justify-center p-6"
+            style={{ backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
+            onClick={() => setShowRCPicker(false)}
           >
-            {/* Header */}
-            <div className="px-6 pt-7 pb-4 text-center">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center mx-auto mb-4 shadow-glass">
-                <Shuffle size={24} className="text-white" />
+            <div className="absolute inset-0 bg-[#0f0a28]/50" />
+
+            <motion.div
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="glass-strong w-full max-w-sm rounded-3xl overflow-hidden relative z-10"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="px-6 pt-7 pb-4 text-center">
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                  style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}
+                >
+                  <Shuffle size={24} className="text-white" />
+                </div>
+                <h3 className="font-bold text-slate-800 text-base">Random Connect</h3>
+                <p className="text-sm text-slate-400 mt-1">Choose how you want to connect</p>
               </div>
-              <h3 className="font-bold text-slate-800 text-base">Random Connect</h3>
-              <p className="text-sm text-slate-400 mt-1">Choose how you want to connect</p>
-            </div>
 
-            {/* Options */}
-            <div className="flex flex-col gap-2 px-4 pb-6">
-              <button
-                className="glass-hover rounded-2xl p-4 flex items-center gap-4 text-left"
-                onClick={() => { setShowRCPicker(false); setShowStartCall(true); }}
-              >
-                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-sky-400 to-blue-500 flex items-center justify-center flex-shrink-0">
-                  <Video size={19} className="text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-800">Nearby Video Call</p>
-                  <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">Start a room visible to people within your chosen radius</p>
-                </div>
-              </button>
+              {/* Options */}
+              <div className="flex flex-col gap-2 px-4 pb-6">
+                <motion.button
+                  className="glass-hover rounded-2xl p-4 flex items-center gap-4 text-left"
+                  onClick={() => { setShowRCPicker(false); setShowStartCall(true); }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: 'spring', damping: 20, stiffness: 400 }}
+                >
+                  <div
+                    className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: 'linear-gradient(135deg,#38bdf8,#0ea5e9)' }}
+                  >
+                    <Video size={19} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800">Nearby Video Call</p>
+                    <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">Start a room visible to people within your radius</p>
+                  </div>
+                </motion.button>
 
-              <button
-                className="glass-hover rounded-2xl p-4 flex items-center gap-4 text-left"
-                onClick={() => { setShowRCPicker(false); setShowRandomConnect(true); }}
-              >
-                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                  <Shuffle size={19} className="text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-800">Random Call</p>
-                  <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">Get matched 1-on-1 with a random person from anywhere</p>
-                </div>
-              </button>
+                <motion.button
+                  className="glass-hover rounded-2xl p-4 flex items-center gap-4 text-left"
+                  onClick={() => { setShowRCPicker(false); setShowRandomConnect(true); }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: 'spring', damping: 20, stiffness: 400 }}
+                >
+                  <div
+                    className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)' }}
+                  >
+                    <Shuffle size={19} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800">Random Call</p>
+                    <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">Get matched 1-on-1 with a random person nearby</p>
+                  </div>
+                </motion.button>
 
-              <button
-                className="text-center text-xs text-slate-400 py-2"
-                onClick={() => setShowRCPicker(false)}
-              >
-                Cancel
-              </button>
-            </div>
+                <button
+                  className="text-center text-xs text-slate-400 py-2 hover:text-slate-600 transition-colors"
+                  onClick={() => setShowRCPicker(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
         )}
       </AnimatePresence>
 

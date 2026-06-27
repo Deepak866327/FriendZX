@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Post, FeedPage } from '@/services/postService';
 import { PostCard } from './PostCard';
 import { SkeletonCard } from './SkeletonCard';
-import { feedItemVariants } from '@/utils/animations';
+import { staggerListVariants, staggerItemVariants, feedItemVariants } from '@/utils/animations';
 
 type Fetcher = (cursor?: string, limit?: number) => Promise<FeedPage>;
 
@@ -19,11 +19,12 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   refreshKey = 0,
   emptyText  = 'No posts yet',
 }) => {
-  const [posts,   setPosts]   = useState<Post[]>([]);
-  const [cursor,  setCursor]  = useState<string | undefined>(undefined);
-  const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
+  const [posts,     setPosts]     = useState<Post[]>([]);
+  const [cursor,    setCursor]    = useState<string | undefined>(undefined);
+  const [hasMore,   setHasMore]   = useState(true);
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState('');
+  const [isInitial, setIsInitial] = useState(true);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingRef  = useRef(false);
 
@@ -41,6 +42,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
       setPosts(prev => reset ? page.posts : [...prev, ...page.posts]);
       setCursor(page.nextCursor ?? undefined);
       setHasMore(page.hasMore);
+      if (reset) setIsInitial(true);
     } catch (err: any) {
       setError(err.message || 'Failed to load posts');
     } finally {
@@ -53,6 +55,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     setPosts([]);
     setCursor(undefined);
     setHasMore(true);
+    setIsInitial(true);
     load(true);
   }, [refreshKey, fetcher]);
 
@@ -60,7 +63,12 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     const el = sentinelRef.current;
     if (!el) return;
     const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) load(); },
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsInitial(false);
+          load();
+        }
+      },
       { rootMargin: '200px' },
     );
     obs.observe(el);
@@ -77,42 +85,50 @@ export const PostFeed: React.FC<PostFeedProps> = ({
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.22 }}
-        className="glass rounded-2xl p-10 flex flex-col items-center gap-3 text-slate-400 mt-4"
+        className="glass rounded-2xl p-10 flex flex-col items-center gap-3 text-center mt-2"
       >
-        <div className="w-12 h-12 rounded-2xl bg-white/60 flex items-center justify-center">
-          <FileText size={22} className="text-indigo-300" />
+        <div
+          className="w-14 h-14 rounded-2xl flex items-center justify-center"
+          style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.12),rgba(139,92,246,0.12))' }}
+        >
+          <FileText size={24} className="text-indigo-400" />
         </div>
-        <p className="text-sm font-medium">{emptyText}</p>
+        <div>
+          <p className="text-sm font-semibold text-slate-700">{emptyText}</p>
+          <p className="text-xs text-slate-400 mt-0.5">Check back soon</p>
+        </div>
       </motion.div>
     );
   }
 
   return (
     <div>
-      {posts.map(post => (
-        <motion.div
-          key={post.id}
-          variants={feedItemVariants}
-          initial="hidden"
-          animate="visible"
-        >
-          <PostCard
-            post={post}
-            onDelete={handleDelete}
-            onLikeChange={handleLikeChange}
-          />
+      {/* Initial batch uses stagger; scroll-loaded items animate individually */}
+      {isInitial ? (
+        <motion.div variants={staggerListVariants} initial="hidden" animate="visible">
+          {posts.map(post => (
+            <motion.div key={post.id} variants={staggerItemVariants}>
+              <PostCard post={post} onDelete={handleDelete} onLikeChange={handleLikeChange} />
+            </motion.div>
+          ))}
         </motion.div>
-      ))}
+      ) : (
+        posts.map(post => (
+          <motion.div key={post.id} variants={feedItemVariants} initial="hidden" animate="visible">
+            <PostCard post={post} onDelete={handleDelete} onLikeChange={handleLikeChange} />
+          </motion.div>
+        ))
+      )}
 
       {loading && (
         <>
           <SkeletonCard />
-          <SkeletonCard />
+          <SkeletonCard textOnly />
         </>
       )}
 
       {error && (
-        <div className="glass rounded-2xl px-4 py-3 text-sm text-red-500 text-center mt-2">
+        <div className="glass rounded-2xl px-4 py-3 text-sm text-rose-500 text-center mt-2">
           {error}
         </div>
       )}
@@ -120,7 +136,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
       {!loading && hasMore && <div ref={sentinelRef} style={{ height: 1 }} />}
 
       {!hasMore && posts.length > 0 && (
-        <p className="text-center text-xs text-slate-400 py-6">You're all caught up</p>
+        <p className="text-center text-xs text-slate-400 py-6">You're all caught up ✓</p>
       )}
     </div>
   );

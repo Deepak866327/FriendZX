@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Search, X, MapPin, UserPlus, Check, Loader } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from '@/hooks/useLocation';
 import { useAuth } from '@/hooks/useAuth';
 import { userService } from '@/services/userService';
@@ -19,6 +21,13 @@ function fmtRadius(r: number): string {
   return r >= 1000 ? `${(r / 1000).toFixed(0)} km` : `${r} m`;
 }
 
+const GRAD = [
+  'from-indigo-500 to-violet-600',
+  'from-violet-500 to-purple-600',
+  'from-sky-400 to-blue-500',
+  'from-pink-500 to-rose-500',
+];
+
 interface SearchBarProps {
   inputRef?: React.RefObject<HTMLInputElement>;
 }
@@ -27,25 +36,18 @@ export const SearchBar: React.FC<SearchBarProps> = ({ inputRef }) => {
   const { nearbyUsers, searchRadius } = useLocation();
   const { user: currentUser } = useAuth();
 
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<PublicProfile[]>([]);
-  const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  // Track follow state per userId: 'idle' | 'following' | 'loading'
+  const [query, setQuery]           = useState('');
+  const [results, setResults]       = useState<PublicProfile[]>([]);
+  const [isOpen, setIsOpen]         = useState(false);
+  const [isLoading, setIsLoading]   = useState(false);
   const [followStates, setFollowStates] = useState<Record<string, FollowState>>({});
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const containerRef  = useRef<HTMLDivElement>(null);
+  const debounceRef   = useRef<ReturnType<typeof setTimeout>>();
 
-  // Debounced search
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    if (query.trim().length < 2) {
-      setResults([]);
-      setIsOpen(false);
-      return;
-    }
+    if (query.trim().length < 2) { setResults([]); setIsOpen(false); return; }
 
     debounceRef.current = setTimeout(async () => {
       setIsLoading(true);
@@ -63,22 +65,18 @@ export const SearchBar: React.FC<SearchBarProps> = ({ inputRef }) => {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query]);
 
-  // Close on outside click
   useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setIsOpen(false);
     };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   const handleFollow = useCallback(async (userId: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // keep dropdown open
+    e.stopPropagation();
     const prev = followStates[userId] ?? 'idle';
     if (prev === 'loading') return;
-
     setFollowStates(s => ({ ...s, [userId]: 'loading' }));
     try {
       if (prev === 'following') {
@@ -90,16 +88,10 @@ export const SearchBar: React.FC<SearchBarProps> = ({ inputRef }) => {
       }
     } catch (err: any) {
       const msg: string = err?.message ?? '';
-      // If backend says already following, sync state accordingly
-      if (msg.toLowerCase().includes('already following')) {
-        setFollowStates(s => ({ ...s, [userId]: 'following' }));
-      } else {
-        setFollowStates(s => ({ ...s, [userId]: prev }));
-      }
+      setFollowStates(s => ({ ...s, [userId]: msg.toLowerCase().includes('already following') ? 'following' : prev }));
     }
   }, [followStates]);
 
-  // Sort: nearby first (closest), then by followers
   const sortedResults = useMemo<SearchResult[]>(() => {
     return results
       .map(profile => {
@@ -114,78 +106,96 @@ export const SearchBar: React.FC<SearchBarProps> = ({ inputRef }) => {
       });
   }, [results, nearbyUsers]);
 
-  const handleClear = () => {
-    setQuery('');
-    setResults([]);
-    setIsOpen(false);
-  };
-
   const nearbyList = sortedResults.filter(r => r.isNearby);
-  const farList = sortedResults.filter(r => !r.isNearby);
+  const farList    = sortedResults.filter(r => !r.isNearby);
+
+  const handleClear = () => { setQuery(''); setResults([]); setIsOpen(false); };
 
   return (
-    <div className="search-bar-wrap" ref={containerRef}>
-      <div className="search-bar-inner">
-        <svg className="search-bar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
-        </svg>
+    <div ref={containerRef} className="relative w-full">
+
+      {/* ── Input ── */}
+      <div className="relative">
+        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         <input
           ref={inputRef}
           type="text"
-          className="search-bar-input"
+          className="input-glass pl-10 pr-10"
           placeholder="Search people…"
           value={query}
           onChange={e => setQuery(e.target.value)}
           onFocus={() => sortedResults.length > 0 && setIsOpen(true)}
         />
-        {isLoading && <span className="search-bar-spinner" />}
-        {query && !isLoading && (
-          <button className="search-bar-clear" onClick={handleClear} aria-label="Clear">×</button>
-        )}
+        <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+          {isLoading ? (
+            <Loader size={14} className="animate-spin text-slate-400" />
+          ) : query ? (
+            <button onClick={handleClear} aria-label="Clear" className="text-slate-400 hover:text-slate-600 transition-colors">
+              <X size={14} />
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      {isOpen && (
-        <div className="search-dropdown">
-          {sortedResults.length > 0 ? (
-            <>
-              {nearbyList.length > 0 && (
-                <div className="search-group-label">📍 Within {fmtRadius(searchRadius)}</div>
-              )}
-              {nearbyList.map(r => (
-                <SearchResultRow
-                  key={r.userId}
-                  result={r}
-                  isSelf={r.userId === currentUser?.id}
-                  followState={followStates[r.userId] ?? 'idle'}
-                  onFollow={handleFollow}
-                  onClose={() => setIsOpen(false)}
-                />
-              ))}
+      {/* ── Dropdown ── */}
+      <AnimatePresence>
+        {isOpen && sortedResults.length > 0 && (
+          <motion.div
+            className="absolute top-full left-0 right-0 mt-2 glass rounded-2xl overflow-hidden"
+            style={{ maxHeight: 360, overflowY: 'auto', zIndex: 100 }}
+            initial={{ opacity: 0, y: -8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+          >
+            {nearbyList.length > 0 && (
+              <>
+                <GroupLabel>
+                  <MapPin size={9} className="inline mr-1" />
+                  Within {fmtRadius(searchRadius)}
+                </GroupLabel>
+                {nearbyList.map(r => (
+                  <ResultRow key={r.userId} result={r} isSelf={r.userId === currentUser?.id} followState={followStates[r.userId] ?? 'idle'} onFollow={handleFollow} onClose={() => setIsOpen(false)} />
+                ))}
+              </>
+            )}
 
-              {farList.length > 0 && (
-                <div className={`search-group-label${nearbyList.length > 0 ? ' search-group-label-far' : ''}`}>
+            {farList.length > 0 && (
+              <>
+                <GroupLabel className={nearbyList.length > 0 ? 'border-t border-white/30' : ''}>
                   {nearbyList.length > 0 ? `Outside ${fmtRadius(searchRadius)}` : 'All results'}
-                </div>
-              )}
-              {farList.map(r => (
-                <SearchResultRow
-                  key={r.userId}
-                  result={r}
-                  isSelf={r.userId === currentUser?.id}
-                  followState={followStates[r.userId] ?? 'idle'}
-                  onFollow={handleFollow}
-                  onClose={() => setIsOpen(false)}
-                />
-              ))}
-            </>
-          ) : (
-            <div className="search-no-results">No users found for "{query}"</div>
-          )}
-        </div>
-      )}
+                </GroupLabel>
+                {farList.map(r => (
+                  <ResultRow key={r.userId} result={r} isSelf={r.userId === currentUser?.id} followState={followStates[r.userId] ?? 'idle'} onFollow={handleFollow} onClose={() => setIsOpen(false)} />
+                ))}
+              </>
+            )}
+          </motion.div>
+        )}
+
+        {isOpen && sortedResults.length === 0 && !isLoading && query.length >= 2 && (
+          <motion.div
+            className="absolute top-full left-0 right-0 mt-2 glass rounded-2xl px-4 py-6 text-center text-sm text-slate-400"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            No users found for &ldquo;{query}&rdquo;
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
+
+/* ── Sub-components ── */
+
+const GroupLabel: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+  <div className={`px-4 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider ${className}`}>
+    {children}
+  </div>
+);
 
 interface RowProps {
   result: SearchResult;
@@ -195,52 +205,59 @@ interface RowProps {
   onClose: () => void;
 }
 
-const SearchResultRow: React.FC<RowProps> = ({ result, isSelf, followState, onFollow, onClose }) => (
-  <div className="search-result-item" onClick={onClose}>
-    <div className="search-result-avatar">
-      {result.photos?.[0] ? (
-        <img src={result.photos[0]} alt="" />
-      ) : (
-        <span>{result.firstName?.charAt(0)?.toUpperCase() || '?'}</span>
-      )}
-    </div>
+const ResultRow: React.FC<RowProps> = ({ result, isSelf, followState, onFollow, onClose }) => {
+  const gradIdx = (result.userId?.charCodeAt(0) ?? 0) % GRAD.length;
 
-    <div className="search-result-info">
-      <div className="search-result-name">
-        {result.firstName} {result.lastName}
-        {isSelf && <span className="search-self-tag">You</span>}
+  return (
+    <div
+      className="flex items-center gap-3 px-4 py-3 hover:bg-white/30 cursor-pointer transition-colors"
+      onClick={onClose}
+    >
+      {/* Avatar */}
+      <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${GRAD[gradIdx]} flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden`}>
+        {result.photos?.[0]
+          ? <img src={result.photos[0]} alt="" className="w-full h-full object-cover" />
+          : result.firstName?.charAt(0)?.toUpperCase() || '?'}
       </div>
-      <div className="search-result-meta">
-        <span className="search-result-uid" title={result.userId}>
-          ID: {result.userId.slice(0, 8)}…
-        </span>
+
+      {/* Name + meta */}
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-semibold text-slate-800 truncate flex items-center gap-1.5">
+          {result.firstName} {result.lastName}
+          {isSelf && (
+            <span className="text-[10px] font-medium text-indigo-500 bg-indigo-50/80 px-1.5 py-0.5 rounded-full">You</span>
+          )}
+        </div>
         {(result.followers ?? 0) > 0 && (
-          <span className="search-result-followers">{result.followers} followers</span>
+          <span className="text-[10px] text-slate-400">{result.followers} followers</span>
+        )}
+      </div>
+
+      {/* Distance + follow */}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {result.isNearby && (
+          <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50/80 px-2 py-0.5 rounded-full flex items-center gap-0.5">
+            <MapPin size={8} />
+            {fmtDist(result.distance!)}
+          </span>
+        )}
+        {!isSelf && (
+          <button
+            className={followState === 'following' ? 'btn-secondary' : 'btn-primary'}
+            disabled={followState === 'loading'}
+            onClick={e => onFollow(result.userId, e)}
+            style={{ fontSize: 11, minHeight: 30, paddingTop: 4, paddingBottom: 4, paddingLeft: 10, paddingRight: 10, borderRadius: 10 }}
+          >
+            {followState === 'loading' ? (
+              <Loader size={11} className="animate-spin" />
+            ) : followState === 'following' ? (
+              <><Check size={11} /> Following</>
+            ) : (
+              <><UserPlus size={11} /> Follow</>
+            )}
+          </button>
         )}
       </div>
     </div>
-
-    <div className="search-result-badge-wrap">
-      {result.isNearby && (
-        <span className="search-result-badge nearby">📍 {fmtDist(result.distance!)}</span>
-      )}
-
-      {!isSelf && (
-        <button
-          className={`search-friend-btn ${followState === 'following' ? 'following' : ''}`}
-          disabled={followState === 'loading'}
-          onClick={e => onFollow(result.userId, e)}
-          title={followState === 'following' ? 'Unfollow' : 'Add Friend'}
-        >
-          {followState === 'loading' ? (
-            <span className="search-friend-spinner" />
-          ) : followState === 'following' ? (
-            '✓ Following'
-          ) : (
-            '+ Add Friend'
-          )}
-        </button>
-      )}
-    </div>
-  </div>
-);
+  );
+};

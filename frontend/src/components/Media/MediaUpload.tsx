@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
+import { Upload, CheckCircle2, X, AlertCircle } from 'lucide-react';
 import { uploadFile, MediaItem, UploadProgress } from '@/services/mediaService';
 
 const ACCEPTED_IMAGES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
@@ -18,18 +19,18 @@ export interface PendingMedia {
   done:      boolean;
 }
 
-interface MediaUploadProps {
+interface Props {
   onMediaReady: (items: MediaItem[]) => void;
   maxFiles?:    number;
   accept?:      'images' | 'videos' | 'both';
 }
 
-export const MediaUpload: React.FC<MediaUploadProps> = ({
+export const MediaUpload: React.FC<Props> = ({
   onMediaReady,
   maxFiles = MAX_FILES,
   accept   = 'both',
 }) => {
-  const [pending, setPending] = useState<PendingMedia[]>([]);
+  const [pending,  setPending]  = useState<PendingMedia[]>([]);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -50,39 +51,26 @@ export const MediaUpload: React.FC<MediaUploadProps> = ({
     if (!toProcess.length) return;
 
     const newPending: PendingMedia[] = toProcess.map(file => ({
-      file,
-      preview:   URL.createObjectURL(file),
-      mediaItem: null,
-      progress:  0,
-      error:     validate(file),
-      uploading: false,
-      done:      false,
+      file, preview: URL.createObjectURL(file),
+      mediaItem: null, progress: 0, error: validate(file),
+      uploading: false, done: false,
     }));
 
-    setPending(prev => {
-      const updated = [...prev, ...newPending];
-      return updated;
-    });
+    setPending(prev => [...prev, ...newPending]);
 
-    // Upload valid files
     for (let i = 0; i < toProcess.length; i++) {
       const file  = toProcess[i];
       const error = validate(file);
       if (error) continue;
-
       const idx = pending.length + i;
-
       setPending(prev => prev.map((p, j) => j === idx ? { ...p, uploading: true } : p));
-
       try {
         const mediaItem = await uploadFile(file, (prog: UploadProgress) => {
           setPending(prev => prev.map((p, j) => j === idx ? { ...p, progress: prog.percent } : p));
         });
-
         setPending(prev => {
           const next = prev.map((p, j) => j === idx ? { ...p, mediaItem, uploading: false, done: true, progress: 100 } : p);
-          const ready = next.filter(p => p.done && p.mediaItem).map(p => p.mediaItem!);
-          onMediaReady(ready);
+          onMediaReady(next.filter(p => p.done && p.mediaItem).map(p => p.mediaItem!));
           return next;
         });
       } catch (err: any) {
@@ -92,8 +80,7 @@ export const MediaUpload: React.FC<MediaUploadProps> = ({
   }, [pending, maxFiles, onMediaReady]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
+    e.preventDefault(); setDragging(false);
     processFiles(Array.from(e.dataTransfer.files));
   }, [processFiles]);
 
@@ -104,83 +91,97 @@ export const MediaUpload: React.FC<MediaUploadProps> = ({
 
   const remove = (idx: number) => {
     setPending(prev => {
-      const item = prev[idx];
-      URL.revokeObjectURL(item.preview);
+      URL.revokeObjectURL(prev[idx].preview);
       const next = prev.filter((_, i) => i !== idx);
-      const ready = next.filter(p => p.done && p.mediaItem).map(p => p.mediaItem!);
-      onMediaReady(ready);
+      onMediaReady(next.filter(p => p.done && p.mediaItem).map(p => p.mediaItem!));
       return next;
     });
   };
 
-  const allDone     = pending.length > 0 && pending.every(p => p.done || p.error);
-  const anyUploading = pending.some(p => p.uploading);
+  const hintText =
+    accept === 'both'   ? 'Images (JPG, PNG, WebP) · Videos (MP4, MOV, WebM)' :
+    accept === 'images' ? 'JPG, PNG, WebP — max 20 MB each' :
+                          'MP4, MOV, WebM — max 200 MB each';
 
   return (
-    <div className="media-upload">
+    <div className="space-y-3">
       {/* Drop zone */}
       {pending.length < maxFiles && (
         <div
-          className={`media-upload__zone${dragging ? ' media-upload__zone--active' : ''}`}
+          className={`relative flex flex-col items-center gap-2.5 px-5 py-6 rounded-2xl border-2 border-dashed transition-all cursor-pointer ${
+            dragging
+              ? 'border-indigo-400 bg-indigo-50/60'
+              : 'border-indigo-200/70 bg-indigo-50/30 hover:border-indigo-300 hover:bg-indigo-50/50'
+          }`}
           onClick={() => inputRef.current?.click()}
           onDragOver={e => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
         >
           <input
-            ref={inputRef}
-            type="file"
-            hidden
-            multiple
-            accept={acceptedTypes.join(',')}
-            onChange={onInput}
+            ref={inputRef} type="file" hidden multiple
+            accept={acceptedTypes.join(',')} onChange={onInput}
           />
-          <div className="media-upload__icon">📁</div>
-          <p className="media-upload__hint">
-            Drag & drop or <span className="media-upload__browse">browse</span>
-          </p>
-          <p className="media-upload__sub">
-            {accept === 'both'   ? 'Images (JPG, PNG, WebP) · Videos (MP4, MOV, WebM)' :
-             accept === 'images' ? 'JPG, PNG, WebP — max 20 MB each' :
-                                   'MP4, MOV, WebM — max 200 MB each'}
-          </p>
-          {maxFiles > 1 && <p className="media-upload__sub">Up to {maxFiles} files</p>}
+          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-colors ${dragging ? 'bg-indigo-100' : 'bg-indigo-50'}`}>
+            <Upload size={22} className="text-indigo-400" />
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-semibold text-indigo-600">
+              Drag & drop or <span className="underline underline-offset-2">browse</span>
+            </p>
+            <p className="text-xs text-slate-400 mt-0.5">{hintText}</p>
+            {maxFiles > 1 && <p className="text-xs text-slate-400 mt-0.5">Up to {maxFiles} files</p>}
+          </div>
         </div>
       )}
 
       {/* Previews */}
       {pending.length > 0 && (
-        <div className="media-upload__grid">
-          {pending.map((item, idx) => (
-            <div key={idx} className={`media-upload__item${item.error ? ' media-upload__item--error' : ''}`}>
-              {item.file.type.startsWith('video/') ? (
-                <video src={item.preview} className="media-upload__preview" muted />
-              ) : (
-                <img src={item.preview} className="media-upload__preview" alt="" />
-              )}
+        <div className="grid grid-cols-3 gap-2">
+          {pending.map((item, i) => (
+            <div
+              key={i}
+              className={`relative rounded-xl overflow-hidden bg-slate-100 aspect-square ${item.error ? 'ring-2 ring-rose-400' : ''}`}
+            >
+              {item.file.type.startsWith('video/')
+                ? <video src={item.preview} className="w-full h-full object-cover" muted />
+                : <img src={item.preview} className="w-full h-full object-cover" alt="" />
+              }
 
+              {/* Upload progress overlay */}
               {item.uploading && (
-                <div className="media-upload__overlay">
-                  <div className="media-upload__bar-track">
-                    <div className="media-upload__bar-fill" style={{ width: `${item.progress}%` }} />
+                <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1.5 px-2">
+                  <div className="w-full h-1.5 rounded-full bg-white/30 overflow-hidden">
+                    <div className="h-full bg-indigo-400 transition-all duration-300" style={{ width: `${item.progress}%` }} />
                   </div>
-                  <span className="media-upload__pct">{item.progress}%</span>
+                  <span className="text-white text-[10px] font-semibold">{item.progress}%</span>
                 </div>
               )}
 
-              {item.done && (
-                <div className="media-upload__done">✓</div>
+              {/* Done badge */}
+              {item.done && !item.uploading && (
+                <div className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                  <CheckCircle2 size={12} className="text-white" />
+                </div>
               )}
 
+              {/* Error badge */}
               {item.error && (
-                <div className="media-upload__err-badge">{item.error}</div>
+                <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center p-2 text-center">
+                  <AlertCircle size={16} className="text-rose-400 mb-1" />
+                  <p className="text-[10px] text-rose-300 leading-tight">{item.error}</p>
+                </div>
               )}
 
+              {/* Remove button */}
               <button
-                className="media-upload__remove"
-                onClick={e => { e.stopPropagation(); remove(idx); }}
+                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-black/80 transition-colors disabled:opacity-40"
+                onClick={e => { e.stopPropagation(); remove(i); }}
                 disabled={item.uploading}
-              >✕</button>
+                aria-label="Remove"
+              >
+                <X size={11} />
+              </button>
             </div>
           ))}
         </div>

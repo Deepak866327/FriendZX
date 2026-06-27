@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, MessageCircle, Zap, Flame, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { NotificationBell } from '@/components/Notifications/NotificationBell';
@@ -9,6 +10,7 @@ import { useChatContext } from '@/context/ChatContext';
 import { useChallengeContext } from '@/context/ChallengeContext';
 import { DailyChallengeModal } from '@/components/Challenge/DailyChallengeModal';
 import { useScrollDirection } from '@/hooks/useScrollDirection';
+import { overlayVariants } from '@/utils/animations';
 
 const GRADIENTS = [
   'from-indigo-500 to-violet-600',
@@ -32,7 +34,7 @@ export const Header: React.FC = () => {
   const gradIdx  = (user?.id?.charCodeAt(0) ?? 0) % GRADIENTS.length;
 
   useEffect(() => {
-    if (showSearch) setTimeout(() => searchInputRef.current?.focus(), 50);
+    if (showSearch) setTimeout(() => searchInputRef.current?.focus(), 60);
   }, [showSearch]);
 
   useEffect(() => {
@@ -46,30 +48,46 @@ export const Header: React.FC = () => {
     <>
       {showDaily && <DailyChallengeModal onClose={() => setShowDaily(false)} />}
 
-      {/* Search overlay */}
-      {showSearch && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-16"
-          style={{ background: 'rgba(15,10,40,0.55)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
-          onClick={() => setShowSearch(false)}
-        >
-          <div className="w-full max-w-lg" onClick={e => e.stopPropagation()}>
-            {/* Close row */}
-            <div className="flex items-center justify-end mb-2">
-              <button
-                onClick={() => setShowSearch(false)}
-                className="btn-icon w-8 h-8 rounded-xl glass text-slate-400 hover:text-slate-600"
-                aria-label="Close search"
-              >
-                <X size={15} />
-              </button>
-            </div>
-            <SearchBar inputRef={searchInputRef} />
-          </div>
-        </div>
-      )}
+      {/* ── Search overlay ── */}
+      <AnimatePresence>
+        {showSearch && (
+          <motion.div
+            key="search-overlay"
+            className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-16"
+            style={{ backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
+            variants={overlayVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            onClick={() => setShowSearch(false)}
+          >
+            {/* Tint layer */}
+            <div className="absolute inset-0 bg-[#0f0a28]/50" />
 
-      {/* Fixed nav bar */}
+            <motion.div
+              className="relative z-10 w-full max-w-lg"
+              initial={{ opacity: 0, y: -14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.20, ease: [0.4, 0, 0.2, 1] }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-end mb-2">
+                <button
+                  onClick={() => setShowSearch(false)}
+                  className="btn-icon w-8 h-8 rounded-xl glass text-slate-500 hover:text-slate-700"
+                  aria-label="Close search"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+              <SearchBar inputRef={searchInputRef} />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Fixed nav bar ── */}
       <header
         className="fixed top-0 left-0 right-0 z-40 glass-nav border-b border-white/30 transition-transform duration-300"
         style={{ transform: scrollHidden ? 'translateY(-100%)' : 'translateY(0)' }}
@@ -89,72 +107,115 @@ export const Header: React.FC = () => {
           <div className="flex items-center gap-0.5 sm:gap-1">
 
             {/* Search */}
-            <button
+            <motion.button
               onClick={() => setShowSearch(true)}
-              className="btn-icon w-9 h-9 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50/60"
+              className="btn-icon w-9 h-9 rounded-full text-slate-500 hover:text-indigo-600 hover:bg-indigo-50/60"
               aria-label="Search"
+              whileTap={{ scale: 0.88 }}
+              transition={{ type: 'spring', damping: 20, stiffness: 400 }}
             >
               <Search size={17} />
-            </button>
+            </motion.button>
 
             {/* Messages */}
-            <button
+            <motion.button
               onClick={() => navigate('/messages')}
-              className={`btn-icon relative w-9 h-9 rounded-xl transition-colors ${
+              className={`btn-icon relative w-9 h-9 rounded-full transition-colors ${
                 isActive('/messages')
-                  ? 'text-indigo-600 bg-indigo-50/60'
+                  ? 'text-indigo-600 bg-indigo-50/70'
                   : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50/60'
               }`}
               aria-label="Messages"
+              whileTap={{ scale: 0.88 }}
+              transition={{ type: 'spring', damping: 20, stiffness: 400 }}
             >
               <MessageCircle size={17} />
-              {totalUnread > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white text-[9px] font-bold flex items-center justify-center px-1 leading-none">
-                  {totalUnread > 9 ? '9+' : totalUnread}
-                </span>
-              )}
-            </button>
+              <AnimatePresence>
+                {totalUnread > 0 && (
+                  <motion.span
+                    className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full text-white text-[9px] font-bold flex items-center justify-center px-1 leading-none"
+                    style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0 }}
+                    transition={{ type: 'spring', damping: 18, stiffness: 420 }}
+                  >
+                    {totalUnread > 9 ? '9+' : totalUnread}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.button>
 
             {/* Daily Challenge */}
-            <button
+            <motion.button
               onClick={() => setShowDaily(true)}
-              className={`btn-icon relative w-9 h-9 rounded-xl transition-colors ${
+              className={`btn-icon relative w-9 h-9 rounded-full transition-colors ${
                 hasDoneToday
-                  ? 'text-amber-500 bg-amber-50/60'
+                  ? 'text-amber-500 bg-amber-50/70'
                   : 'text-slate-500 hover:text-amber-500 hover:bg-amber-50/60'
               }`}
               aria-label="Daily Challenge"
               title={streak.current > 0 ? `${streak.current} day streak` : 'Daily Challenge'}
+              whileTap={{ scale: 0.88 }}
+              transition={{ type: 'spring', damping: 20, stiffness: 400 }}
             >
               <Zap size={17} />
-              {streak.current > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex items-center gap-px min-w-[20px] h-4 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-white text-[9px] font-bold px-1 leading-none">
-                  <Flame size={7} />
-                  {streak.current}
-                </span>
-              )}
-              {pendingChallenges.length > 0 && streak.current === 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center px-1 leading-none">
-                  {pendingChallenges.length}
-                </span>
-              )}
-            </button>
+              <AnimatePresence>
+                {streak.current > 0 && (
+                  <motion.span
+                    className="absolute -top-0.5 -right-0.5 flex items-center gap-px min-w-[20px] h-4 rounded-full text-white text-[9px] font-bold px-1 leading-none"
+                    style={{ background: 'linear-gradient(135deg,#f59e0b,#f97316)' }}
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0 }}
+                    transition={{ type: 'spring', damping: 18, stiffness: 420 }}
+                  >
+                    <Flame size={7} />
+                    {streak.current}
+                  </motion.span>
+                )}
+                {pendingChallenges.length > 0 && streak.current === 0 && (
+                  <motion.span
+                    className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center px-1 leading-none"
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0 }}
+                    transition={{ type: 'spring', damping: 18, stiffness: 420 }}
+                  >
+                    {pendingChallenges.length}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.button>
 
             {/* Notification bell */}
             <NotificationBell />
 
-            {/* Profile avatar */}
-            <button
+            {/* Profile avatar — gradient ring when on profile */}
+            <motion.button
               onClick={() => navigate('/profile')}
-              className={`ml-1 w-8 h-8 rounded-full bg-gradient-to-br ${GRADIENTS[gradIdx]} flex items-center justify-center text-white font-bold text-xs flex-shrink-0 transition-all duration-200 ${
-                isActive('/profile')
-                  ? 'ring-2 ring-indigo-500 ring-offset-1'
-                  : 'hover:scale-105'
-              }`}
+              className="ml-1 flex-shrink-0"
               aria-label="My Profile"
+              whileHover={{ scale: 1.07 }}
+              whileTap={{ scale: 0.91 }}
+              transition={{ type: 'spring', damping: 20, stiffness: 400 }}
             >
-              {user?.firstName?.charAt(0)?.toUpperCase() || '?'}
-            </button>
+              <div
+                className="p-[2px] rounded-full"
+                style={{
+                  background: isActive('/profile')
+                    ? 'linear-gradient(135deg,#6366f1,#8b5cf6,#38bdf8)'
+                    : 'transparent',
+                }}
+              >
+                <div
+                  className={`w-8 h-8 rounded-full bg-gradient-to-br ${GRADIENTS[gradIdx]} flex items-center justify-center text-white font-bold text-xs`}
+                  style={isActive('/profile') ? { boxShadow: 'none' } : undefined}
+                >
+                  {user?.firstName?.charAt(0)?.toUpperCase() || '?'}
+                </div>
+              </div>
+            </motion.button>
           </div>
         </div>
       </header>

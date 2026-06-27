@@ -1,13 +1,21 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { ZoomIn, ZoomOut, Maximize2, Square, Smartphone, Monitor, Check } from 'lucide-react';
 
 export type AspectRatioKey = '1:1' | '4:5' | '16:9' | 'original';
 
 export const ASPECT_RATIOS: { key: AspectRatioKey; label: string; icon: string; w: number; h: number }[] = [
-  { key: 'original', label: 'Original', icon: '⬜', w: 0, h: 0 },
-  { key: '1:1',      label: 'Square',   icon: '⬛', w: 1, h: 1 },
-  { key: '4:5',      label: 'Portrait', icon: '📱', w: 4, h: 5 },
-  { key: '16:9',     label: 'Wide',     icon: '🖥️',  w: 16, h: 9 },
+  { key: 'original', label: 'Original', icon: 'original', w: 0,  h: 0 },
+  { key: '1:1',      label: 'Square',   icon: 'square',   w: 1,  h: 1 },
+  { key: '4:5',      label: 'Portrait', icon: 'portrait', w: 4,  h: 5 },
+  { key: '16:9',     label: 'Wide',     icon: 'wide',     w: 16, h: 9 },
 ];
+
+const AR_ICONS: Record<AspectRatioKey, React.ReactNode> = {
+  'original': <Maximize2  size={15} />,
+  '1:1':      <Square     size={15} />,
+  '4:5':      <Smartphone size={15} />,
+  '16:9':     <Monitor    size={15} />,
+};
 
 interface Props {
   file: File;
@@ -16,30 +24,27 @@ interface Props {
 }
 
 export const ImageCropper: React.FC<Props> = ({ file, onCrop, onCancel }) => {
-  // Fit inside the modal (90vw, max 520px) and leave room for header + controls + ratios + actions (~240px)
-  const CW = Math.min(480, typeof window !== 'undefined' ? window.innerWidth * 0.9 - 32 : 448);
+  const CW     = Math.min(480, typeof window !== 'undefined' ? window.innerWidth * 0.9 - 32 : 448);
   const MAX_CH = typeof window !== 'undefined' ? Math.max(150, window.innerHeight * 0.9 - 240) : 400;
 
-  const [imgSrc, setImgSrc]   = useState('');
-  const [natW, setNatW]       = useState(0);
-  const [natH, setNatH]       = useState(0);
-  const [ar, setAr]           = useState<AspectRatioKey>('original');
-  const [scale, setScale]     = useState(1);   // user zoom multiplier (1 = baseScale)
-  const [offset, setOffset]   = useState({ x: 0, y: 0 });
+  const [imgSrc, setImgSrc]     = useState('');
+  const [natW, setNatW]         = useState(0);
+  const [natH, setNatH]         = useState(0);
+  const [ar, setAr]             = useState<AspectRatioKey>('original');
+  const [scale, setScale]       = useState(1);
+  const [offset, setOffset]     = useState({ x: 0, y: 0 });
   const [applying, setApplying] = useState(false);
 
-  const viewRef    = useRef<HTMLDivElement>(null);
-  const dragRef    = useRef({ active: false, startX: 0, startY: 0, ox: 0, oy: 0 });
-  const pinchRef   = useRef({ active: false, dist: 0, scaleStart: 1 });
+  const viewRef  = useRef<HTMLDivElement>(null);
+  const dragRef  = useRef({ active: false, startX: 0, startY: 0, ox: 0, oy: 0 });
+  const pinchRef = useRef({ active: false, dist: 0, scaleStart: 1 });
 
-  // Load image blob
   useEffect(() => {
     const url = URL.createObjectURL(file);
     setImgSrc(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  // Container height from aspect ratio
   const arDef = ASPECT_RATIOS.find(a => a.key === ar)!;
   const CH = Math.min(
     arDef.w > 0
@@ -48,25 +53,17 @@ export const ImageCropper: React.FC<Props> = ({ file, onCrop, onCancel }) => {
     MAX_CH,
   );
 
-  // baseScale = minimum scale so image covers container (like object-fit: cover)
-  const baseScale = natW > 0 ? Math.max(CW / natW, CH / natH) : 1;
+  const baseScale  = natW > 0 ? Math.max(CW / natW, CH / natH) : 1;
   const totalScale = baseScale * scale;
+  const dispW      = natW * totalScale;
+  const dispH      = natH * totalScale;
+  const maxX       = Math.max(0, (dispW - CW) / 2);
+  const maxY       = Math.max(0, (dispH - CH) / 2);
+  const cx         = Math.max(-maxX, Math.min(maxX, offset.x));
+  const cy         = Math.max(-maxY, Math.min(maxY, offset.y));
+  const imgLeft    = CW / 2 + cx - dispW / 2;
+  const imgTop     = CH / 2 + cy - dispH / 2;
 
-  // Image display size
-  const dispW = natW * totalScale;
-  const dispH = natH * totalScale;
-
-  // Clamp offset so image always covers container
-  const maxX = Math.max(0, (dispW - CW) / 2);
-  const maxY = Math.max(0, (dispH - CH) / 2);
-  const cx   = Math.max(-maxX, Math.min(maxX, offset.x));
-  const cy   = Math.max(-maxY, Math.min(maxY, offset.y));
-
-  // Image top-left in container
-  const imgLeft = CW / 2 + cx - dispW / 2;
-  const imgTop  = CH / 2 + cy - dispH / 2;
-
-  // Attach non-passive touch events for preventDefault
   useEffect(() => {
     const el = viewRef.current;
     if (!el) return;
@@ -90,44 +87,38 @@ export const ImageCropper: React.FC<Props> = ({ file, onCrop, onCancel }) => {
           y: dragRef.current.oy + (e.touches[0].clientY - dragRef.current.startY),
         });
       } else if (e.touches.length === 2 && pinchRef.current.active) {
-        const dx = e.touches[1].clientX - e.touches[0].clientX;
-        const dy = e.touches[1].clientY - e.touches[0].clientY;
+        const dx   = e.touches[1].clientX - e.touches[0].clientX;
+        const dy   = e.touches[1].clientY - e.touches[0].clientY;
         const dist = Math.hypot(dx, dy);
-        const ratio = dist / pinchRef.current.dist;
-        setScale(s => Math.max(1, Math.min(4, pinchRef.current.scaleStart * ratio)));
+        setScale(s => Math.max(1, Math.min(4, pinchRef.current.scaleStart * (dist / pinchRef.current.dist))));
       }
     };
 
     const onTouchEnd = () => {
-      dragRef.current.active = false;
+      dragRef.current.active  = false;
       pinchRef.current.active = false;
-      // Snap offset to clamped value
       setOffset(prev => {
-        const maxX2 = Math.max(0, (natW * baseScale * scale - CW) / 2);
-        const maxY2 = Math.max(0, (natH * baseScale * scale - CH) / 2);
-        return {
-          x: Math.max(-maxX2, Math.min(maxX2, prev.x)),
-          y: Math.max(-maxY2, Math.min(maxY2, prev.y)),
-        };
+        const mx = Math.max(0, (natW * baseScale * scale - CW) / 2);
+        const my = Math.max(0, (natH * baseScale * scale - CH) / 2);
+        return { x: Math.max(-mx, Math.min(mx, prev.x)), y: Math.max(-my, Math.min(my, prev.y)) };
       });
     };
 
-    el.addEventListener('touchstart',  onTouchStart, { passive: false });
-    el.addEventListener('touchmove',   onTouchMove,  { passive: false });
-    el.addEventListener('touchend',    onTouchEnd,   { passive: true  });
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
+    el.addEventListener('touchmove',  onTouchMove,  { passive: false });
+    el.addEventListener('touchend',   onTouchEnd,   { passive: true  });
     return () => {
-      el.removeEventListener('touchstart',  onTouchStart);
-      el.removeEventListener('touchmove',   onTouchMove);
-      el.removeEventListener('touchend',    onTouchEnd);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove',  onTouchMove);
+      el.removeEventListener('touchend',   onTouchEnd);
     };
   }, [offset, scale, natW, natH, baseScale, CW, CH]);
 
-  // Mouse drag
   const onMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     dragRef.current = { active: true, startX: e.clientX, startY: e.clientY, ox: offset.x, oy: offset.y };
     window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('mouseup',   onMouseUp);
   };
 
   const onMouseMove = useCallback((e: MouseEvent) => {
@@ -141,7 +132,7 @@ export const ImageCropper: React.FC<Props> = ({ file, onCrop, onCancel }) => {
   const onMouseUp = useCallback(() => {
     dragRef.current.active = false;
     window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('mouseup', onMouseUp);
+    window.removeEventListener('mouseup',   onMouseUp);
     setOffset(prev => {
       const mx = Math.max(0, (natW * baseScale * scale - CW) / 2);
       const my = Math.max(0, (natH * baseScale * scale - CH) / 2);
@@ -149,39 +140,32 @@ export const ImageCropper: React.FC<Props> = ({ file, onCrop, onCancel }) => {
     });
   }, [onMouseMove, natW, natH, baseScale, scale, CW, CH]);
 
-  // Scroll to zoom
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     setScale(s => Math.max(1, Math.min(4, s + (e.deltaY > 0 ? -0.08 : 0.08))));
   };
 
-  // Change AR: reset zoom + offset
   const changeAr = (key: AspectRatioKey) => {
     setAr(key);
     setScale(1);
     setOffset({ x: 0, y: 0 });
   };
 
-  // Canvas crop and export
   const handleApply = async () => {
     if (!natW || applying) return;
     setApplying(true);
 
-    // Source rectangle in natural image pixels
     const srcX = Math.max(0, (-imgLeft) / totalScale);
-    const srcY = Math.max(0, (-imgTop) / totalScale);
+    const srcY = Math.max(0, (-imgTop)  / totalScale);
     const srcW = Math.min(natW - srcX, CW / totalScale);
     const srcH = Math.min(natH - srcY, CH / totalScale);
-
-    // Output canvas size (up to 1080 wide)
     const outW = Math.round(Math.min(1080, srcW));
     const outH = Math.round(outW * (srcH / srcW));
 
     const canvas = document.createElement('canvas');
-    canvas.width = outW;
+    canvas.width  = outW;
     canvas.height = outH;
     const ctx = canvas.getContext('2d')!;
-
     const img = new Image();
     img.src = imgSrc;
     await new Promise<void>(res => { img.onload = () => res(); });
@@ -190,18 +174,17 @@ export const ImageCropper: React.FC<Props> = ({ file, onCrop, onCancel }) => {
     canvas.toBlob(blob => {
       setApplying(false);
       if (!blob) { onCrop(file); return; }
-      const cropped = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' });
-      onCrop(cropped);
+      onCrop(new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' }));
     }, 'image/jpeg', 0.92);
   };
 
   return (
-    <div className="img-cropper">
+    <div className="flex flex-col gap-3 w-full">
       {/* Viewport */}
       <div
         ref={viewRef}
-        className="img-cropper__viewport"
-        style={{ width: CW, height: CH }}
+        className="relative overflow-hidden rounded-2xl bg-slate-950 select-none"
+        style={{ width: CW, height: CH, cursor: 'grab', touchAction: 'none', flexShrink: 0 }}
         onMouseDown={onMouseDown}
         onWheel={onWheel}
       >
@@ -211,49 +194,73 @@ export const ImageCropper: React.FC<Props> = ({ file, onCrop, onCancel }) => {
             onLoad={e => { setNatW(e.currentTarget.naturalWidth); setNatH(e.currentTarget.naturalHeight); }}
             draggable={false}
             style={{ position: 'absolute', left: imgLeft, top: imgTop, width: dispW, height: dispH, userSelect: 'none', pointerEvents: 'none' }}
+            alt=""
           />
         )}
+
         {/* Rule-of-thirds grid */}
-        <div className="img-cropper__grid">
-          <div className="img-cropper__grid-h" style={{ top: '33.33%' }} />
-          <div className="img-cropper__grid-h" style={{ top: '66.66%' }} />
-          <div className="img-cropper__grid-v" style={{ left: '33.33%' }} />
-          <div className="img-cropper__grid-v" style={{ left: '66.66%' }} />
+        <div className="absolute inset-0 pointer-events-none">
+          {/* horizontal lines */}
+          <div className="absolute w-full h-px bg-white/25" style={{ top: '33.33%' }} />
+          <div className="absolute w-full h-px bg-white/25" style={{ top: '66.66%' }} />
+          {/* vertical lines */}
+          <div className="absolute h-full w-px bg-white/25" style={{ left: '33.33%' }} />
+          <div className="absolute h-full w-px bg-white/25" style={{ left: '66.66%' }} />
+          {/* corner brackets */}
+          <div className="absolute inset-0 ring-1 ring-white/20 rounded-2xl" />
         </div>
       </div>
 
       {/* Zoom slider */}
-      <div className="img-cropper__controls">
-        <span className="img-cropper__zoom-icon" style={{ fontSize: '12px' }}>🔍−</span>
+      <div className="flex items-center gap-3 px-1">
+        <ZoomOut size={16} className="text-slate-400 flex-shrink-0" />
         <input
-          type="range" className="img-cropper__zoom-slider"
+          type="range"
+          className="fx-slider flex-1"
           min={1} max={4} step={0.01}
           value={scale}
           onChange={e => setScale(Number(e.target.value))}
         />
-        <span className="img-cropper__zoom-icon" style={{ fontSize: '16px' }}>🔍+</span>
+        <ZoomIn size={16} className="text-slate-400 flex-shrink-0" />
       </div>
 
-      {/* Aspect ratio buttons */}
-      <div className="img-cropper__ratios">
-        {ASPECT_RATIOS.map(({ key, label, icon }) => (
-          <button
-            key={key}
-            type="button"
-            className={`img-cropper__ratio-btn${ar === key ? ' active' : ''}`}
-            onClick={() => changeAr(key)}
-          >
-            <span className="img-cropper__ratio-icon">{icon}</span>
-            <span className="img-cropper__ratio-label">{label}</span>
-          </button>
-        ))}
+      {/* Aspect ratio pills */}
+      <div className="flex items-center gap-2 justify-center flex-wrap">
+        {ASPECT_RATIOS.map(({ key, label }) => {
+          const active = ar === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => changeAr(key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                active
+                  ? 'bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-md shadow-indigo-200/60'
+                  : 'glass text-slate-600 hover:bg-white/70'
+              }`}
+            >
+              {active ? <Check size={12} /> : AR_ICONS[key]}
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Actions */}
-      <div className="img-cropper__actions">
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>Skip</button>
-        <button type="button" className="btn btn-primary" onClick={handleApply} disabled={applying}>
-          {applying ? 'Processing…' : 'Next →'}
+      <div className="flex gap-3 pt-1">
+        <button type="button" className="btn-secondary flex-1" onClick={onCancel}>
+          Skip
+        </button>
+        <button
+          type="button"
+          className="btn-primary flex-1"
+          onClick={handleApply}
+          disabled={applying}
+        >
+          {applying
+            ? <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+            : 'Next →'
+          }
         </button>
       </div>
     </div>

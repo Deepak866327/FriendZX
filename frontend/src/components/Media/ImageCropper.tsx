@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Check } from 'lucide-react';
 
-// Supported Instagram aspect ratios
 const RATIOS = [
-  { label: '1:1',    value: 1.0     },
-  { label: '4:5',    value: 0.8     },
-  { label: '1.91:1', value: 1.91    },
-  { label: '9:16',   value: 0.5625  },
+  { label: '1:1',    value: 1.0    },
+  { label: '4:5',    value: 0.8    },
+  { label: '1.91:1', value: 1.91   },
+  { label: '9:16',   value: 0.5625 },
 ];
 
 interface ImageCropperProps {
@@ -15,23 +15,21 @@ interface ImageCropperProps {
 }
 
 export const ImageCropper: React.FC<ImageCropperProps> = ({ src, onCrop, onCancel }) => {
-  const canvasRef    = useRef<HTMLCanvasElement>(null);
-  const imgRef       = useRef<HTMLImageElement | null>(null);
-  const [ratio, setRatio] = useState(1.0);
-  const [cropX, setCropX] = useState(0);
-  const [cropY, setCropY] = useState(0);
-  const [scale, setScale] = useState(1);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imgRef    = useRef<HTMLImageElement | null>(null);
+  const [ratio, setRatio]     = useState(1.0);
+  const [cropX, setCropX]     = useState(0);
+  const [cropY, setCropY]     = useState(0);
+  const [scale, setScale]     = useState(1);
   const [dragging, setDragging] = useState(false);
-  const dragStart  = useRef({ x: 0, y: 0, cx: 0, cy: 0 });
+  const dragStart = useRef({ x: 0, y: 0, cx: 0, cy: 0 });
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     const img    = imgRef.current;
     if (!canvas || !img) return;
-    const ctx    = canvas.getContext('2d')!;
-    const cw     = canvas.width;
-    const ch     = canvas.height;
-    ctx.clearRect(0, 0, cw, ch);
+    const ctx = canvas.getContext('2d')!;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, cropX * scale, cropY * scale, img.naturalWidth * scale, img.naturalHeight * scale);
   }, [cropX, cropY, scale]);
 
@@ -39,16 +37,14 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({ src, onCrop, onCance
     const img = new Image();
     img.onload = () => {
       imgRef.current = img;
-      // Canvas size: fixed 400px container preserving ratio
-      const canvas = canvasRef.current!;
-      const viewW  = 400;
-      const viewH  = Math.round(viewW / ratio);
+      const canvas  = canvasRef.current!;
+      const viewW   = 400;
+      const viewH   = Math.round(viewW / ratio);
       canvas.width  = viewW;
       canvas.height = viewH;
-      // Fit image to canvas
-      const s = Math.max(viewW / img.naturalWidth, viewH / img.naturalHeight);
+      const s       = Math.max(viewW / img.naturalWidth, viewH / img.naturalHeight);
       setScale(s);
-      setCropX((viewW - img.naturalWidth * s) / 2 / s);
+      setCropX((viewW - img.naturalWidth  * s) / 2 / s);
       setCropY((viewH - img.naturalHeight * s) / 2 / s);
     };
     img.src = src;
@@ -58,13 +54,13 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({ src, onCrop, onCance
     const canvas = canvasRef.current;
     const img    = imgRef.current;
     if (!canvas || !img) return;
-    const viewW = 400;
-    const viewH = Math.round(viewW / ratio);
+    const viewW   = 400;
+    const viewH   = Math.round(viewW / ratio);
     canvas.width  = viewW;
     canvas.height = viewH;
-    const s = Math.max(viewW / img.naturalWidth, viewH / img.naturalHeight);
+    const s       = Math.max(viewW / img.naturalWidth, viewH / img.naturalHeight);
     setScale(s);
-    setCropX((viewW - img.naturalWidth * s) / 2 / s);
+    setCropX((viewW - img.naturalWidth  * s) / 2 / s);
     setCropY((viewH - img.naturalHeight * s) / 2 / s);
   }, [ratio]);
 
@@ -77,10 +73,8 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({ src, onCrop, onCance
 
   const onMouseMove = (e: React.MouseEvent) => {
     if (!dragging) return;
-    const dx = (e.clientX - dragStart.current.x) / scale;
-    const dy = (e.clientY - dragStart.current.y) / scale;
-    setCropX(dragStart.current.cx + dx);
-    setCropY(dragStart.current.cy + dy);
+    setCropX(dragStart.current.cx + (e.clientX - dragStart.current.x) / scale);
+    setCropY(dragStart.current.cy + (e.clientY - dragStart.current.y) / scale);
   };
 
   const onMouseUp = () => setDragging(false);
@@ -92,33 +86,46 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({ src, onCrop, onCance
   };
 
   return (
-    <div className="img-cropper">
-      <div className="img-cropper__ratio-bar">
-        {RATIOS.map(r => (
-          <button
-            key={r.label}
-            className={`img-cropper__ratio-btn${ratio === r.value ? ' active' : ''}`}
-            onClick={() => setRatio(r.value)}
-          >{r.label}</button>
-        ))}
+    <div className="flex flex-col gap-3 w-full">
+      {/* Ratio pills */}
+      <div className="flex items-center gap-2 justify-center flex-wrap">
+        {RATIOS.map(r => {
+          const active = ratio === r.value;
+          return (
+            <button
+              key={r.label}
+              onClick={() => setRatio(r.value)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                active
+                  ? 'bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-md shadow-indigo-200/60'
+                  : 'glass text-slate-600 hover:bg-white/70'
+              }`}
+            >
+              {active && <Check size={12} />}
+              {r.label}
+            </button>
+          );
+        })}
       </div>
 
+      {/* Canvas viewport */}
       <div
-        className="img-cropper__canvas-wrap"
+        className="relative overflow-hidden rounded-2xl bg-slate-950 mx-auto"
+        style={{ cursor: dragging ? 'grabbing' : 'grab', maxWidth: '100%' }}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
-        style={{ cursor: dragging ? 'grabbing' : 'grab' }}
       >
-        <canvas ref={canvasRef} className="img-cropper__canvas" />
+        <canvas ref={canvasRef} className="block max-w-full" />
       </div>
 
-      <p className="img-cropper__hint">Drag to reposition</p>
+      <p className="text-center text-xs text-slate-400">Drag to reposition</p>
 
-      <div className="img-cropper__actions">
-        <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
-        <button className="btn btn-primary"   onClick={handleCrop}>Apply Crop</button>
+      {/* Actions */}
+      <div className="flex gap-3">
+        <button className="btn-secondary flex-1" onClick={onCancel}>Cancel</button>
+        <button className="btn-primary flex-1"   onClick={handleCrop}>Apply Crop</button>
       </div>
     </div>
   );

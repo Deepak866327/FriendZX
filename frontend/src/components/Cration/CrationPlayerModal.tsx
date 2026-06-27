@@ -1,9 +1,14 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { X, Heart, MessageCircle, Share2, Eye, Trash2, Volume2, VolumeX } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import crationService, { Cration } from '@/services/crationService';
 import { useAuth } from '@/hooks/useAuth';
 import { CommentsModal } from '@/components/Common/CommentsModal';
 import { ShareSheet } from '@/components/Common/ShareSheet';
 import { Comment } from '@/services/postService';
+import { overlayVariants } from '@/utils/animations';
+
+const SPRING = { type: 'spring', damping: 20, stiffness: 400 } as const;
 
 interface Props {
   cration: Cration;
@@ -13,12 +18,12 @@ interface Props {
 export const CrationPlayerModal: React.FC<Props> = ({ cration: initial, onClose }) => {
   const { user } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [muted, setMuted]                 = useState(false);
-  const [cration, setCration]             = useState(initial);
+  const [open, setOpen] = useState(true);
+  const [muted, setMuted] = useState(false);
+  const [cration, setCration] = useState(initial);
   const [commentsCount, setCommentsCount] = useState(initial.commentsCount ?? 0);
-  const [sharesCount, setSharesCount]     = useState(initial.sharesCount ?? 0);
-  const [showComments, setShowComments]   = useState(false);
-  const [showShare, setShowShare]         = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [showShare, setShowShare] = useState(false);
 
   const liked = !!user && cration.likes.includes(user.id);
   const isOwner = user?.id === cration.userId;
@@ -40,72 +45,145 @@ export const CrationPlayerModal: React.FC<Props> = ({ cration: initial, onClose 
 
   const handleDelete = async () => {
     if (!window.confirm('Delete this cration?')) return;
-    try {
-      await crationService.remove(cration.id);
-      onClose();
-    } catch {}
+    try { await crationService.remove(cration.id); setOpen(false); } catch {}
   };
 
   return (
-    <div className="cration-feed-overlay" onClick={onClose}>
-      <div className="cration-feed-topbar">
-        <button className="cration-feed-topbar__close" onClick={onClose}>✕</button>
-        <span className="cration-feed-topbar__title">🎬 Cration</span>
-        <span />
-      </div>
-
-      <div
-        className="cration-scroll"
-        style={{ scrollSnapType: 'none' }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="cration-slide" style={{ height: 'calc(100vh - 56px)' }}>
-          <video
-            ref={videoRef}
-            src={videoSrc}
-            className="cration-slide__video"
-            loop
-            playsInline
-            muted={muted}
-            autoPlay
-          />
-
-          <button className="cration-slide__mute" onClick={() => setMuted(m => !m)}>
-            {muted ? '🔇' : '🔊'}
-          </button>
-
-          <div className="cration-slide__actions">
-            <button className={`cration-action${liked ? ' cration-action--liked' : ''}`} onClick={handleLike}>
-              <span className="cration-action__icon">{liked ? '❤️' : '🤍'}</span>
-              <span className="cration-action__count">{cration.likesCount}</span>
-            </button>
-
-            <button className="cration-action" onClick={() => setShowComments(true)}>
-              <span className="cration-action__icon">💬</span>
-            </button>
-
-            <button className="cration-action" onClick={() => setShowShare(true)}>
-              <span className="cration-action__icon">📤</span>
-            </button>
-
-            <div className="cration-action">
-              <span className="cration-action__icon">👁️</span>
-              <span className="cration-action__count">{cration.views}</span>
+    <>
+      <AnimatePresence onExitComplete={onClose}>
+        {open && (
+          <motion.div
+            className="fixed inset-0 z-[60] bg-black flex flex-col"
+            variants={overlayVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
+            {/* Header */}
+            <div
+              className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 pt-4 pb-6"
+              style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)' }}
+            >
+              <motion.button
+                className="btn-icon w-9 h-9 rounded-xl text-white/80 hover:text-white"
+                onClick={() => setOpen(false)}
+                whileTap={{ scale: 0.85 }}
+                transition={SPRING}
+              >
+                <X size={18} />
+              </motion.button>
+              <span className="text-sm font-bold text-white">Cration</span>
+              <div className="w-9" />
             </div>
 
-            {isOwner && (
-              <button className="cration-action cration-action--delete" onClick={handleDelete}>
-                <span className="cration-action__icon">🗑️</span>
-              </button>
-            )}
-          </div>
+            {/* Video */}
+            <video
+              ref={videoRef}
+              src={videoSrc}
+              className="w-full h-full object-contain"
+              loop playsInline muted={muted} autoPlay
+            />
 
-          <div className="cration-slide__info">
-            <div className="cration-slide__user">@user_{cration.userId.slice(0, 6)}</div>
-            {cration.caption && <p className="cration-slide__caption">{cration.caption}</p>}
-          </div>
-        </div>
-      </div>
+            {/* Mute toggle */}
+            <motion.button
+              className="absolute top-16 right-4 w-9 h-9 rounded-full flex items-center justify-center text-white"
+              style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}
+              onClick={() => setMuted(m => !m)}
+              whileTap={{ scale: 0.85 }}
+              transition={SPRING}
+            >
+              {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
+            </motion.button>
+
+            {/* Right action column */}
+            <div className="absolute right-3 bottom-28 flex flex-col items-center gap-5">
+              {/* Like */}
+              <div className="flex flex-col items-center gap-1">
+                <motion.button
+                  className="w-11 h-11 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}
+                  onClick={handleLike}
+                  whileTap={{ scale: 0.8 }}
+                  transition={SPRING}
+                >
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={liked ? 'liked' : 'not-liked'}
+                      initial={{ scale: liked ? 0.35 : 1.3 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0 }}
+                      transition={SPRING}
+                    >
+                      <Heart size={22} className={liked ? 'fill-rose-500 text-rose-500' : 'text-white'} />
+                    </motion.div>
+                  </AnimatePresence>
+                </motion.button>
+                <span className="text-xs text-white/80 font-semibold">{cration.likesCount}</span>
+              </div>
+
+              {/* Comment */}
+              <div className="flex flex-col items-center gap-1">
+                <motion.button
+                  className="w-11 h-11 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}
+                  onClick={() => setShowComments(true)}
+                  whileTap={{ scale: 0.85 }}
+                  transition={SPRING}
+                >
+                  <MessageCircle size={20} className="text-white" />
+                </motion.button>
+                <span className="text-xs text-white/80 font-semibold">{commentsCount}</span>
+              </div>
+
+              {/* Share */}
+              <motion.button
+                className="w-11 h-11 rounded-full flex items-center justify-center"
+                style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}
+                onClick={() => setShowShare(true)}
+                whileTap={{ scale: 0.85 }}
+                transition={SPRING}
+              >
+                <Share2 size={20} className="text-white" />
+              </motion.button>
+
+              {/* Views */}
+              <div className="flex flex-col items-center gap-1">
+                <div
+                  className="w-11 h-11 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}
+                >
+                  <Eye size={20} className="text-white/60" />
+                </div>
+                <span className="text-xs text-white/60 font-semibold">{cration.views}</span>
+              </div>
+
+              {/* Delete */}
+              {isOwner && (
+                <motion.button
+                  className="w-11 h-11 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(220,38,38,0.3)', backdropFilter: 'blur(8px)' }}
+                  onClick={handleDelete}
+                  whileTap={{ scale: 0.85 }}
+                  transition={SPRING}
+                >
+                  <Trash2 size={18} className="text-rose-300" />
+                </motion.button>
+              )}
+            </div>
+
+            {/* Bottom info */}
+            <div
+              className="absolute bottom-0 left-0 right-0 px-4 pb-8 pt-16 pr-20"
+              style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.75), transparent)' }}
+            >
+              <p className="text-sm font-bold text-white mb-1">@user_{cration.userId.slice(0, 6)}</p>
+              {cration.caption && (
+                <p className="text-sm text-white/80 line-clamp-3">{cration.caption}</p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {showComments && (
         <CommentsModal
@@ -127,10 +205,10 @@ export const CrationPlayerModal: React.FC<Props> = ({ cration: initial, onClose 
           text={cration.caption}
           mediaUrl={crationService.getVideoUrl(cration.videoUrl)}
           mediaType="video"
-          onShare={() => { setSharesCount(s => s + 1); crationService.trackShare(cration.id); }}
+          onShare={() => { crationService.trackShare(cration.id); }}
           onClose={() => setShowShare(false)}
         />
       )}
-    </div>
+    </>
   );
 };

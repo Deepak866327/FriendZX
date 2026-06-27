@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Shuffle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { io, Socket } from 'socket.io-client';
 import { RC_WS_PATH } from '@/utils/constants';
 import { storage } from '@/utils/storage';
@@ -83,7 +85,6 @@ export const RandomConnectModal: React.FC<RandomConnectModalProps> = ({ displayN
     let mounted = true;
 
     (async () => {
-      // Get media first
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -119,14 +120,12 @@ export const RandomConnectModal: React.FC<RandomConnectModalProps> = ({ displayN
         const pc = createPC(data.partnerId);
 
         if (data.role === 'caller') {
-          // We initiate — create and send offer
           try {
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             socket.emit('randconn:offer', { toUserId: data.partnerId, sdp: offer });
           } catch { setPhase('waiting'); }
         }
-        // callee waits for the offer
       });
 
       socket.on('randconn:offer', async (data: { fromUserId: string; sdp: RTCSessionDescriptionInit }) => {
@@ -160,14 +159,11 @@ export const RandomConnectModal: React.FC<RandomConnectModalProps> = ({ displayN
         partnerIdRef.current = '';
         setPartnerName('');
         setPhase('waiting');
-        // Auto re-queue
         socket.emit('randconn:join', { displayName });
       });
     })();
 
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -180,63 +176,143 @@ export const RandomConnectModal: React.FC<RandomConnectModalProps> = ({ displayN
     setIsCamOff(c => !c);
   };
 
+  const inCall = phase === 'in-call';
+
   return (
-    <div className="vroom-overlay">
-      <div className="vroom-header">
-        <span className="vroom-title">🎲 Random Connect</span>
-        {phase === 'in-call' && partnerName && (
-          <span className="vroom-count">Connected with {partnerName}</span>
-        )}
+    <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col">
+      {/* Header */}
+      <div
+        className="flex-shrink-0 flex items-center gap-3 px-4 pt-safe py-3"
+        style={{ background: 'rgba(15,10,40,0.80)', backdropFilter: 'blur(16px)' }}
+      >
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center flex-shrink-0">
+          <Shuffle size={15} className="text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-white">Random Connect</p>
+          {inCall && partnerName && (
+            <p className="text-[11px] text-white/50 truncate">Connected with {partnerName}</p>
+          )}
+        </div>
       </div>
 
-      {error ? (
-        <div className="vroom-error"><p>{error}</p><button className="btn btn-secondary" onClick={handleLeave}>Leave</button></div>
-      ) : (
-        <div className={`vroom-grid ${phase === 'in-call' ? 'vroom-grid--2' : 'vroom-grid--1'}`}>
-          {/* Local video — always shown */}
-          <div className="vroom-tile vroom-tile--local">
-            <video ref={localVideoRef} autoPlay playsInline muted className="vroom-video" />
-            <div className="vroom-tile__label">You {isMuted && '🔇'}{isCamOff && ' 🚫'}</div>
+      {/* Error */}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="flex-shrink-0 mx-4 mt-2 flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-rose-500/20 border border-rose-400/30"
+          >
+            <p className="text-sm text-rose-300">{error}</p>
+            <button
+              onClick={handleLeave}
+              className="text-xs text-white font-semibold px-3 py-1.5 rounded-xl bg-rose-500/30 hover:bg-rose-500/50 transition-colors"
+            >
+              Leave
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Video grid */}
+      {!error && (
+        <div className="flex-1 overflow-hidden p-3 relative">
+          <div className={`h-full grid gap-3 ${inCall ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+            {/* Local tile */}
+            <div className="relative bg-slate-900 rounded-2xl overflow-hidden flex items-center justify-center min-h-[160px]">
+              <video ref={localVideoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
+              <div className="absolute bottom-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded-lg glass-dark">
+                <span className="text-white text-[11px] font-semibold">You</span>
+                {isMuted  && <MicOff   size={9} className="text-rose-400" />}
+                {isCamOff && <VideoOff size={9} className="text-rose-400" />}
+              </div>
+            </div>
+
+            {/* Remote tile — only when in-call */}
+            {inCall && (
+              <div className="relative bg-slate-900 rounded-2xl overflow-hidden flex items-center justify-center min-h-[160px]">
+                <video ref={remoteVideoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover" />
+                <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-lg glass-dark text-white text-[11px] font-semibold">
+                  {partnerName}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Remote — only in-call */}
-          {phase === 'in-call' && (
-            <div className="vroom-tile">
-              <video ref={remoteVideoRef} autoPlay playsInline className="vroom-video" />
-              <div className="vroom-tile__label">{partnerName}</div>
-            </div>
-          )}
+          {/* Waiting / matched overlay */}
+          <AnimatePresence>
+            {(phase === 'connecting' || phase === 'waiting' || phase === 'matched') && (
+              <motion.div
+                key={phase}
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="absolute inset-3 flex flex-col items-center justify-center gap-5 rounded-2xl"
+                style={{ background: 'rgba(15,10,40,0.70)', backdropFilter: 'blur(8px)' }}
+              >
+                {/* Spinner */}
+                <div className="relative">
+                  <div className={`w-14 h-14 rounded-full border-4 animate-spin ${
+                    phase === 'matched'
+                      ? 'border-emerald-100/30 border-t-emerald-400'
+                      : 'border-indigo-100/30 border-t-indigo-400'
+                  }`} />
+                  {phase === 'matched' && (
+                    <motion.div
+                      className="absolute inset-0 rounded-full border-4 border-emerald-400/20"
+                      animate={{ scale: [1, 1.4, 1] }}
+                      transition={{ duration: 1.6, repeat: Infinity }}
+                    />
+                  )}
+                </div>
 
-          {/* Waiting overlay */}
-          {(phase === 'connecting' || phase === 'waiting') && (
-            <div className="randconn-waiting">
-              <div className="randconn-waiting__spinner" />
-              <p className="randconn-waiting__title">
-                {phase === 'connecting' ? 'Setting up…' : 'Looking for someone…'}
-              </p>
-              <p className="randconn-waiting__sub">
-                {phase === 'waiting'
-                  ? 'You\'ll be connected with a random person as soon as one is available'
-                  : 'Getting your camera ready'}
-              </p>
-            </div>
-          )}
-
-          {/* Matched but WebRTC not yet connected */}
-          {phase === 'matched' && (
-            <div className="randconn-waiting">
-              <div className="randconn-waiting__spinner randconn-waiting__spinner--green" />
-              <p className="randconn-waiting__title">Matched with {partnerName}!</p>
-              <p className="randconn-waiting__sub">Establishing connection…</p>
-            </div>
-          )}
+                <div className="text-center space-y-1.5">
+                  <motion.p
+                    className="text-white font-semibold text-base"
+                    animate={{ opacity: [0.7, 1, 0.7] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  >
+                    {phase === 'connecting' && 'Setting up…'}
+                    {phase === 'waiting'    && 'Looking for someone…'}
+                    {phase === 'matched'    && `Matched with ${partnerName}!`}
+                  </motion.p>
+                  <p className="text-white/40 text-sm">
+                    {phase === 'connecting' && 'Getting your camera ready'}
+                    {phase === 'waiting'    && "You'll be connected as soon as someone is available"}
+                    {phase === 'matched'    && 'Establishing connection…'}
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
 
-      <div className="vroom-controls">
-        <button className={`vroom-ctrl ${isMuted ? 'vroom-ctrl--active' : ''}`} onClick={toggleMute}>{isMuted ? '🔇' : '🎤'}</button>
-        <button className={`vroom-ctrl ${isCamOff ? 'vroom-ctrl--active' : ''}`} onClick={toggleCam}>{isCamOff ? '📵' : '📹'}</button>
-        <button className="vroom-ctrl vroom-ctrl--end" onClick={handleLeave}>📵 Leave</button>
+      {/* Controls */}
+      <div className="flex-shrink-0 pb-safe">
+        <div
+          className="flex items-center justify-center gap-6 px-6 py-5"
+          style={{ background: 'rgba(15,10,40,0.70)', backdropFilter: 'blur(16px)' }}
+        >
+          <button onClick={toggleMute} className="flex flex-col items-center gap-1.5 cursor-pointer" aria-label={isMuted ? 'Unmute' : 'Mute'}>
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center ${isMuted ? 'bg-white/20 border border-white/20' : 'glass-dark'}`}>
+              {isMuted ? <MicOff size={22} className="text-white" /> : <Mic size={22} className="text-white" />}
+            </div>
+            <span className="text-[10px] text-white/70 font-medium">{isMuted ? 'Unmute' : 'Mute'}</span>
+          </button>
+
+          <button onClick={toggleCam} className="flex flex-col items-center gap-1.5 cursor-pointer" aria-label={isCamOff ? 'Cam On' : 'Cam Off'}>
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center ${isCamOff ? 'bg-white/20 border border-white/20' : 'glass-dark'}`}>
+              {isCamOff ? <VideoOff size={22} className="text-white" /> : <Video size={22} className="text-white" />}
+            </div>
+            <span className="text-[10px] text-white/70 font-medium">{isCamOff ? 'Cam On' : 'Cam Off'}</span>
+          </button>
+
+          <button onClick={handleLeave} className="flex flex-col items-center gap-1.5 cursor-pointer" aria-label="Leave">
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-rose-500 to-red-600 flex items-center justify-center shadow-xl">
+              <PhoneOff size={22} className="text-white" />
+            </div>
+            <span className="text-[10px] text-white/70 font-medium">Leave</span>
+          </button>
+        </div>
       </div>
     </div>
   );

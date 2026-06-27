@@ -1,11 +1,25 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { LoginCredentials } from '@/types/models';
 
 interface LoginFormProps {
   onForgotPassword?: () => void;
 }
+
+const FieldError: React.FC<{ message: string }> = ({ message }) => (
+  <motion.p
+    className="text-xs text-red-500 flex items-center gap-1"
+    initial={{ opacity: 0, y: -4 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -4 }}
+    transition={{ duration: 0.15 }}
+  >
+    <AlertCircle size={11} className="flex-shrink-0" />
+    {message}
+  </motion.p>
+);
 
 export const LoginForm: React.FC<LoginFormProps> = ({ onForgotPassword }) => {
   const { login, isLoading, error } = useAuth();
@@ -58,11 +72,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onForgotPassword }) => {
           className="input-glass"
           style={validErr.identifier ? { borderColor: 'rgba(239,68,68,0.5)', boxShadow: '0 0 0 3px rgba(239,68,68,0.10)' } : undefined}
         />
-        {validErr.identifier && (
-          <p className="text-xs text-red-500 flex items-center gap-1">
-            <span>⚠</span> {validErr.identifier}
-          </p>
-        )}
+        <AnimatePresence>
+          {validErr.identifier && <FieldError message={validErr.identifier} />}
+        </AnimatePresence>
       </div>
 
       {/* Password */}
@@ -104,24 +116,34 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onForgotPassword }) => {
             {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         </div>
-        {validErr.password && (
-          <p className="text-xs text-red-500 flex items-center gap-1">
-            <span>⚠</span> {validErr.password}
-          </p>
-        )}
+        <AnimatePresence>
+          {validErr.password && <FieldError message={validErr.password} />}
+        </AnimatePresence>
       </div>
 
       {/* Backend error */}
-      {error && (
-        <div className="rounded-xl bg-red-50 border border-red-200/60 px-4 py-3 text-sm text-red-600">
-          {error}
-        </div>
-      )}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            className="rounded-xl px-4 py-3 text-sm text-red-600 flex items-start gap-2"
+            style={{ background: 'rgba(254,242,242,0.9)', border: '1px solid rgba(252,165,165,0.5)' }}
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: 0.18 }}
+          >
+            <AlertCircle size={15} className="flex-shrink-0 mt-0.5 text-red-400" />
+            <span>{error}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <button
+      <motion.button
         type="submit"
         disabled={isLoading || !form.identifier.trim() || !form.password}
         className="btn-primary w-full mt-1"
+        whileTap={{ scale: 0.97 }}
+        transition={{ type: 'spring', damping: 20, stiffness: 400 }}
       >
         {isLoading ? (
           <span className="flex items-center gap-2">
@@ -131,7 +153,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onForgotPassword }) => {
             Logging in…
           </span>
         ) : 'Log In'}
-      </button>
+      </motion.button>
     </form>
   );
 };

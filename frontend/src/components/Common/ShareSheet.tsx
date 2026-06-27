@@ -1,19 +1,24 @@
 import React, { useEffect, useState } from 'react';
+import { X, Share2, MessageCircle, Sparkles, Check, Link, ChevronLeft } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { chatService } from '@/services/chatService';
 import { userService } from '@/services/userService';
 import { useSocket } from '@/context/SocketContext';
 import { PublicProfile } from '@/types/api';
 import { StoryCreator } from '@/components/Story/StoryCreator';
+import {
+  overlayVariants, sheetVariants,
+  staggerListVariants, staggerItemVariants,
+} from '@/utils/animations';
 
 interface Props {
-  /** What is being shared */
   type: 'post' | 'cration';
   id: string;
-  text?: string;          // post content / cration caption
-  mediaUrl?: string;      // first image (post) or video thumbnail (cration)
+  text?: string;
+  mediaUrl?: string;
   mediaType?: 'image' | 'video';
   userLocation?: { latitude: number; longitude: number } | null;
-  onShare?: () => void;   // called when share increments
+  onShare?: () => void;
   onClose: () => void;
 }
 
@@ -21,14 +26,13 @@ export const ShareSheet: React.FC<Props> = ({
   type, id, text, mediaUrl, mediaType = 'image', userLocation, onShare, onClose,
 }) => {
   const { emit } = useSocket();
-  const [showFriendPicker, setShowFriendPicker] = useState(false);
-  const [showStoryCreator, setShowStoryCreator] = useState(false);
+  const [view, setView] = useState<'main' | 'friends' | 'story'>('main');
   const [conversations, setConversations] = useState<{ partnerId: string; lastMessage: string }[]>([]);
   const [profiles, setProfiles] = useState<Record<string, PublicProfile>>({});
   const [loadingConvos, setLoadingConvos] = useState(false);
   const [sent, setSent] = useState<Set<string>>(new Set());
+  const [copied, setCopied] = useState(false);
 
-  // ── External share ──────────────────────────────────────────────────────────
   const handleExternalShare = async () => {
     onShare?.();
     const shareData = {
@@ -38,25 +42,24 @@ export const ShareSheet: React.FC<Props> = ({
     };
     if (navigator.share) {
       await navigator.share(shareData).catch(() => {});
+      onClose();
     } else {
       await navigator.clipboard.writeText(shareData.url).catch(() => {});
-      alert('Link copied to clipboard!');
+      setCopied(true);
+      setTimeout(() => { setCopied(false); onClose(); }, 1500);
     }
-    onClose();
   };
 
-  // ── Load conversations for friend picker ────────────────────────────────────
   const loadConversations = async () => {
     setLoadingConvos(true);
     try {
       const convos = await chatService.getConversations(30);
       setConversations(convos);
-      // Fetch display names
       const ids = [...new Set(convos.map(c => c.partnerId))];
-      await Promise.allSettled(ids.map(async id => {
+      await Promise.allSettled(ids.map(async pid => {
         try {
-          const p = await userService.getPublicProfile(id);
-          setProfiles(prev => ({ ...prev, [id]: p }));
+          const p = await userService.getPublicProfile(pid);
+          setProfiles(prev => ({ ...prev, [pid]: p }));
         } catch {}
       }));
     } catch {}
@@ -64,10 +67,9 @@ export const ShareSheet: React.FC<Props> = ({
   };
 
   useEffect(() => {
-    if (showFriendPicker) loadConversations();
-  }, [showFriendPicker]);
+    if (view === 'friends') loadConversations();
+  }, [view]);
 
-  // ── Send to friend via chat ─────────────────────────────────────────────────
   const sendToFriend = (partnerId: string) => {
     const label = type === 'post' ? '📸 Shared a post' : '🎬 Shared a cration';
     const preview = text ? `\n${text.slice(0, 80)}${text.length > 80 ? '…' : ''}` : '';
@@ -81,96 +83,162 @@ export const ShareSheet: React.FC<Props> = ({
     return p?.firstName ? `${p.firstName}${p.lastName ? ' ' + p.lastName : ''}` : partnerId.slice(0, 10) + '…';
   };
 
-  // ── Story creator with pre-loaded media ─────────────────────────────────────
-  if (showStoryCreator) {
+  if (view === 'story') {
     return (
       <StoryCreator
         userLocation={userLocation}
         initialMediaUrl={mediaUrl}
         initialMediaType={mediaType}
-        onCreated={() => { setShowStoryCreator(false); onShare?.(); onClose(); }}
-        onClose={() => setShowStoryCreator(false)}
+        onCreated={() => { onShare?.(); onClose(); }}
+        onClose={() => setView('main')}
       />
     );
   }
 
-  // ── Friend picker ────────────────────────────────────────────────────────────
-  if (showFriendPicker) {
-    return (
-      <div className="modal-overlay" onClick={() => setShowFriendPicker(false)}>
-        <div className="modal" onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', height: '60vh', width: 'min(400px, 95vw)', padding: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-            <span style={{ fontWeight: 700, fontSize: '16px' }}>Send to friend</span>
-            <button onClick={() => setShowFriendPicker(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: 'var(--ig-secondary)' }}>✕</button>
-          </div>
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {loadingConvos
-              ? <div className="loading" style={{ padding: '30px 0' }}><div className="loading-spinner" /></div>
-              : conversations.length === 0
-                ? <p style={{ textAlign: 'center', color: 'var(--ig-secondary)', padding: '40px 16px', margin: 0 }}>No conversations yet</p>
-                : conversations.map(c => {
-                    const isSent = sent.has(c.partnerId);
-                    const p = profiles[c.partnerId];
-                    return (
-                      <div key={c.partnerId} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 18px', borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--ig-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#fff', fontSize: '16px', flexShrink: 0, overflow: 'hidden' }}>
-                          {p?.photos?.[0] ? <img src={p.photos[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : getDisplayName(c.partnerId).charAt(0).toUpperCase()}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: '14px' }}>{getDisplayName(c.partnerId)}</div>
-                        </div>
-                        <button
-                          onClick={() => sendToFriend(c.partnerId)}
-                          disabled={isSent}
-                          style={{ background: isSent ? 'var(--card-2)' : 'var(--ig-blue)', color: isSent ? 'var(--ig-secondary)' : '#fff', border: 'none', borderRadius: '8px', padding: '6px 14px', fontSize: '13px', fontWeight: 700, cursor: isSent ? 'default' : 'pointer' }}
-                        >
-                          {isSent ? '✓ Sent' : 'Send'}
-                        </button>
-                      </div>
-                    );
-                  })
-            }
-          </div>
-          <div style={{ padding: '10px 18px', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
-            <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => { setShowFriendPicker(false); onClose(); }}>Done</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const shareOptions = [
+    {
+      icon: <Share2 size={22} />,
+      label: copied ? 'Copied!' : 'Share / Copy',
+      gradient: 'from-indigo-500 to-violet-500',
+      action: handleExternalShare,
+      active: copied,
+    },
+    {
+      icon: <MessageCircle size={22} />,
+      label: 'Send to friend',
+      gradient: 'from-sky-400 to-indigo-500',
+      action: () => setView('friends'),
+    },
+    ...(mediaUrl ? [{
+      icon: <Sparkles size={22} />,
+      label: 'Add to story',
+      gradient: 'from-pink-500 to-rose-500',
+      action: () => setView('story'),
+    }] : []),
+  ];
 
-  // ── Main share options ───────────────────────────────────────────────────────
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="share-sheet"
-        onClick={e => e.stopPropagation()}
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 z-50 flex flex-col justify-end"
+        style={{ background: 'rgba(15,10,40,0.50)', backdropFilter: 'blur(4px)' }}
+        variants={overlayVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        onClick={onClose}
       >
-        <div className="share-sheet__handle" />
-        <div className="share-sheet__title">Share</div>
+        <motion.div
+          className="glass-strong rounded-t-3xl w-full"
+          variants={sheetVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Drag handle */}
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1 rounded-full bg-slate-300/70" />
+          </div>
 
-        <div className="share-sheet__options">
-          {/* External share */}
-          <button className="share-sheet__option" onClick={handleExternalShare}>
-            <div className="share-sheet__option-icon">📤</div>
-            <span className="share-sheet__option-label">Share</span>
-          </button>
+          {/* ── MAIN VIEW ── */}
+          {view === 'main' && (
+            <div className="px-6 pb-8 pt-4 pb-safe">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-base font-semibold text-slate-800">Share</h3>
+                <button className="btn-icon text-slate-500" onClick={onClose} aria-label="Close">
+                  <X size={18} />
+                </button>
+              </div>
 
-          {/* Send to friend */}
-          <button className="share-sheet__option" onClick={() => setShowFriendPicker(true)}>
-            <div className="share-sheet__option-icon">💬</div>
-            <span className="share-sheet__option-label">Send to friend</span>
-          </button>
-
-          {/* Add to story */}
-          {mediaUrl && (
-            <button className="share-sheet__option" onClick={() => setShowStoryCreator(true)}>
-              <div className="share-sheet__option-icon">➕</div>
-              <span className="share-sheet__option-label">Add to story</span>
-            </button>
+              <div className="grid grid-cols-3 gap-4">
+                {shareOptions.map(opt => (
+                  <button
+                    key={opt.label}
+                    onClick={opt.action}
+                    className="flex flex-col items-center gap-2.5 group"
+                  >
+                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${opt.gradient} flex items-center justify-center text-white shadow-lg shadow-indigo-200/50 group-hover:scale-105 group-active:scale-95 transition-transform`}>
+                      {opt.active ? <Check size={22} /> : opt.icon}
+                    </div>
+                    <span className="text-xs font-medium text-slate-600 text-center leading-tight">{opt.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
-        </div>
-      </div>
-    </div>
+
+          {/* ── FRIEND PICKER VIEW ── */}
+          {view === 'friends' && (
+            <div className="flex flex-col" style={{ maxHeight: '70vh' }}>
+              {/* Header */}
+              <div className="flex items-center gap-3 px-5 py-4 border-b border-white/30 flex-shrink-0">
+                <button className="btn-icon text-slate-500" onClick={() => setView('main')} aria-label="Back">
+                  <ChevronLeft size={20} />
+                </button>
+                <span className="text-sm font-semibold text-slate-800 flex-1">Send to friend</span>
+                <button className="btn-icon text-slate-500" onClick={onClose} aria-label="Close">
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Friend list */}
+              <div className="flex-1 overflow-y-auto overscroll-contain py-2">
+                {loadingConvos ? (
+                  <div className="flex justify-center py-10">
+                    <div className="w-8 h-8 rounded-full border-4 border-indigo-100 border-t-indigo-500 animate-spin" />
+                  </div>
+                ) : conversations.length === 0 ? (
+                  <p className="text-center text-sm text-slate-400 py-10 px-4">No conversations yet</p>
+                ) : (
+                  <motion.div
+                    variants={staggerListVariants}
+                    initial="hidden"
+                    animate="visible"
+                  >
+                    {conversations.map(c => {
+                      const isSent = sent.has(c.partnerId);
+                      const p      = profiles[c.partnerId];
+                      const name   = getDisplayName(c.partnerId);
+                      return (
+                        <motion.div
+                          key={c.partnerId}
+                          variants={staggerItemVariants}
+                          className="flex items-center gap-3 px-5 py-3 hover:bg-white/30 transition-colors"
+                        >
+                          <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center text-white text-sm font-bold ring-2 ring-white/60">
+                            {p?.photos?.[0]
+                              ? <img src={p.photos[0]} alt="" className="w-full h-full object-cover" />
+                              : name.charAt(0).toUpperCase()
+                            }
+                          </div>
+                          <span className="flex-1 text-sm font-medium text-slate-800 truncate">{name}</span>
+                          <button
+                            onClick={() => sendToFriend(c.partnerId)}
+                            disabled={isSent}
+                            className={`px-4 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                              isSent
+                                ? 'bg-white/40 text-slate-400'
+                                : 'bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-sm hover:shadow-md'
+                            }`}
+                          >
+                            {isSent ? '✓ Sent' : 'Send'}
+                          </button>
+                        </motion.div>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Done */}
+              <div className="px-5 py-4 border-t border-white/30 pb-safe flex-shrink-0">
+                <button className="btn-primary w-full" onClick={onClose}>Done</button>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 };

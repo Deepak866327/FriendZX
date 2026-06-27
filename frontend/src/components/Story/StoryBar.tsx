@@ -1,4 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { Plus } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { staggerListVariants, staggerItemVariants } from '@/utils/animations';
 import { storyService, StoryGroup, resolveStoryMediaUrl } from '@/services/storyService';
 import { useAuth } from '@/hooks/useAuth';
 import { StoryViewer } from './StoryViewer';
@@ -9,11 +12,93 @@ interface Props {
   userLocation?: { latitude: number; longitude: number } | null;
 }
 
+/* ── Ring wrapper — gradient for unseen, gray for seen, dashed for none ── */
+const Ring: React.FC<{
+  state: 'active' | 'seen' | 'none';
+  children: React.ReactNode;
+}> = ({ state, children }) => {
+  if (state === 'active') {
+    return (
+      <div
+        className="p-[2.5px] rounded-full flex-shrink-0"
+        style={{ background: 'linear-gradient(135deg, #6366f1 0%, #ec4899 55%, #f97316 100%)' }}
+      >
+        <div className="p-[2px] bg-white rounded-full">{children}</div>
+      </div>
+    );
+  }
+  if (state === 'seen') {
+    return (
+      <div className="p-[2.5px] rounded-full bg-slate-200 flex-shrink-0">
+        <div className="p-[2px] bg-white rounded-full">{children}</div>
+      </div>
+    );
+  }
+  return (
+    <div className="p-[2px] rounded-full border-2 border-dashed border-slate-300 flex-shrink-0">
+      {children}
+    </div>
+  );
+};
+
+/* ── Single story circle ── */
+const StoryCircle: React.FC<{
+  src?: string;
+  initial: string;
+  gradient: string;
+  label: string;
+  ringState: 'active' | 'seen' | 'none';
+  badge?: React.ReactNode;
+  onClick: () => void;
+}> = ({ src, initial, gradient, label, ringState, badge, onClick }) => (
+  <motion.div
+    className="flex flex-col items-center gap-1 cursor-pointer flex-shrink-0"
+    variants={staggerItemVariants}
+    onClick={onClick}
+    whileTap={{ scale: 0.92 }}
+    transition={{ type: 'spring', damping: 20, stiffness: 400 }}
+  >
+    <div className="relative">
+      <Ring state={ringState}>
+        <div
+          className={`w-[54px] h-[54px] rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-lg bg-gradient-to-br ${gradient}`}
+        >
+          {src
+            ? <img src={src} alt="" className="w-full h-full object-cover" />
+            : initial}
+        </div>
+      </Ring>
+
+      {badge && (
+        <div className="absolute -bottom-0.5 -right-0.5">{badge}</div>
+      )}
+    </div>
+
+    <span className="text-[10px] font-medium text-slate-500 truncate w-[62px] text-center leading-tight">
+      {label}
+    </span>
+  </motion.div>
+);
+
+const GRADIENTS = [
+  'from-indigo-500 to-violet-600',
+  'from-violet-500 to-purple-600',
+  'from-sky-400 to-blue-500',
+  'from-pink-500 to-rose-500',
+  'from-amber-400 to-orange-500',
+  'from-emerald-400 to-teal-500',
+];
+
+function pickGradient(uid: string) {
+  const n = (uid.charCodeAt(0) ?? 0) + (uid.charCodeAt(uid.length - 1) ?? 0);
+  return GRADIENTS[n % GRADIENTS.length];
+}
+
 export const StoryBar: React.FC<Props> = ({ refreshKey, userLocation }) => {
   const { user } = useAuth();
-  const [groups, setGroups]           = useState<StoryGroup[]>([]);
+  const [groups, setGroups]         = useState<StoryGroup[]>([]);
   const [viewGroupIdx, setViewGroupIdx] = useState<number | null>(null);
-  const [showCreator, setShowCreator] = useState(false);
+  const [showCreator, setShowCreator]   = useState(false);
 
   const loadFeed = useCallback(async () => {
     try {
@@ -24,7 +109,7 @@ export const StoryBar: React.FC<Props> = ({ refreshKey, userLocation }) => {
 
   useEffect(() => { loadFeed(); }, [loadFeed, refreshKey]);
 
-  const myGroup  = groups.find(g => g.userId === user?.id);
+  const myGroup    = groups.find(g => g.userId === user?.id);
   const hasMyStory = !!myGroup && myGroup.stories.length > 0;
 
   const handleMyCircle = () => {
@@ -44,53 +129,63 @@ export const StoryBar: React.FC<Props> = ({ refreshKey, userLocation }) => {
     })));
   };
 
-  const othersWithStories = groups.filter(g => g.userId !== user?.id && g.stories.length > 0);
-  if (!user) return null; // always show if authenticated (lets user create their first story)
+  if (!user) return null;
+
+  const myRingState = hasMyStory
+    ? (myGroup?.hasUnseen ? 'active' : 'seen')
+    : 'none';
 
   return (
     <>
-      <div className="story-bar">
-        {/* Current user's circle */}
-        <div className="story-circle-wrap" onClick={handleMyCircle}>
-          <div className={`story-ring ${hasMyStory ? (myGroup?.hasUnseen ? 'story-ring--active' : 'story-ring--seen') : 'story-ring--none'}`}>
-            <div className="story-circle">
-              {user?.profilePicture
-                ? <img src={user.profilePicture} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : (user?.firstName || '?').charAt(0).toUpperCase()}
-            </div>
-          </div>
-          {!hasMyStory && (
-            <div className="story-add-badge">+</div>
-          )}
-          <div className="story-circle-label">Your story</div>
-        </div>
+      <motion.div
+        className="flex gap-3 overflow-x-auto pb-3 mb-4"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        variants={staggerListVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        {/* ── My story circle ── */}
+        <StoryCircle
+          src={user.profilePicture || undefined}
+          initial={(user.firstName || '?').charAt(0).toUpperCase()}
+          gradient="from-indigo-500 to-violet-600"
+          label="Your story"
+          ringState={myRingState}
+          badge={
+            !hasMyStory ? (
+              <div
+                className="w-5 h-5 rounded-full flex items-center justify-center text-white"
+                style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}
+              >
+                <Plus size={11} strokeWidth={3} />
+              </div>
+            ) : undefined
+          }
+          onClick={handleMyCircle}
+        />
 
-        {/* Other users */}
+        {/* ── Other users' stories ── */}
         {groups
           .filter(g => g.userId !== user?.id && g.stories.length > 0)
-          .map((group) => {
+          .map(group => {
             const idx = groups.indexOf(group);
             const displayName = group.firstName ? group.firstName : group.userId.slice(0, 6);
-            const latestStory = group.stories[0];
-            const hasThumb = latestStory?.mediaType === 'image';
-            const thumbUrl = hasThumb ? resolveStoryMediaUrl(latestStory.mediaUrl) : undefined;
+            const ringState: 'active' | 'seen' = group.hasUnseen ? 'active' : 'seen';
 
             return (
-              <div key={group.userId} className="story-circle-wrap" onClick={() => setViewGroupIdx(idx)}>
-                <div className={`story-ring ${group.hasUnseen ? 'story-ring--active' : 'story-ring--seen'}`}>
-                  <div className="story-circle story-circle--other">
-                    {group.photo
-                      ? <img src={group.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : (group.firstName || group.userId).charAt(0).toUpperCase()}
-                  </div>
-                </div>
-                <div className="story-circle-label">{displayName}</div>
-              </div>
+              <StoryCircle
+                key={group.userId}
+                src={group.photo || undefined}
+                initial={(group.firstName || group.userId).charAt(0).toUpperCase()}
+                gradient={pickGradient(group.userId)}
+                label={displayName}
+                ringState={ringState}
+                onClick={() => setViewGroupIdx(idx)}
+              />
             );
           })}
-      </div>
+      </motion.div>
 
-      {/* Viewer */}
       {viewGroupIdx !== null && (
         <StoryViewer
           groups={groups}
@@ -100,7 +195,6 @@ export const StoryBar: React.FC<Props> = ({ refreshKey, userLocation }) => {
         />
       )}
 
-      {/* Creator */}
       {showCreator && (
         <StoryCreator
           userLocation={userLocation}

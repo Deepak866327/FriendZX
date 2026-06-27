@@ -1,9 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { X, Send, Trash2, MessageCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Comment } from '@/services/postService';
 import { userService } from '@/services/userService';
 import { storage } from '@/utils/storage';
+import {
+  overlayVariants, sheetVariants,
+  staggerListVariants, staggerItemVariants,
+} from '@/utils/animations';
 
-// Global event: when one comment sheet opens, all others close
 const COMMENT_OPEN_EVENT = 'freindzx:comment:open';
 
 interface Props {
@@ -40,10 +45,8 @@ export const CommentsModal: React.FC<Props> = ({
   const inputRef  = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // ── On mount: broadcast "I am opening" so other sheets close ──────────────
   useEffect(() => {
     document.dispatchEvent(new CustomEvent(COMMENT_OPEN_EVENT, { detail: { id: parentId } }));
-
     const handler = (e: Event) => {
       const id = (e as CustomEvent).detail?.id;
       if (id && id !== parentId) onClose();
@@ -52,7 +55,6 @@ export const CommentsModal: React.FC<Props> = ({
     return () => document.removeEventListener(COMMENT_OPEN_EVENT, handler);
   }, [parentId, onClose]);
 
-  // ── Load comments ──────────────────────────────────────────────────────────
   useEffect(() => {
     getComments(parentId)
       .then(data => { setComments(data); fetchProfiles(data); })
@@ -76,12 +78,10 @@ export const CommentsModal: React.FC<Props> = ({
     }));
   };
 
-  // ── Add comment ────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     const text = input.trim();
     if (!text || submitting) return;
-    setSubmitting(true);
-    setSubmitError('');
+    setSubmitting(true); setSubmitError('');
     try {
       const c = await addComment(parentId, text);
       setComments(prev => [...prev, c]);
@@ -90,12 +90,9 @@ export const CommentsModal: React.FC<Props> = ({
       await fetchProfiles([c]);
     } catch (err: any) {
       setSubmitError(err?.response?.data?.error || err?.message || 'Failed to post comment');
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
   };
 
-  // ── Delete comment ─────────────────────────────────────────────────────────
   const handleDelete = async (commentId: string) => {
     try {
       await deleteComment(parentId, commentId);
@@ -104,107 +101,145 @@ export const CommentsModal: React.FC<Props> = ({
     } catch {}
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div
-      className="comments-sheet-overlay"
-      onClick={onClose}
-    >
-      <div
-        className="comments-sheet"
-        onClick={e => e.stopPropagation()}
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 z-50 flex flex-col justify-end"
+        style={{ background: 'rgba(15,10,40,0.50)', backdropFilter: 'blur(4px)' }}
+        variants={overlayVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        onClick={onClose}
       >
-        {/* Drag handle */}
-        <div className="comments-sheet__handle" />
+        <motion.div
+          className="glass-strong rounded-t-3xl w-full flex flex-col"
+          style={{ maxHeight: '82vh' }}
+          variants={sheetVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Drag handle */}
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1 rounded-full bg-slate-300/70" />
+          </div>
 
-        {/* Header — X on left, title centered */}
-        <div className="comments-sheet__header">
-          <button
-            className="comments-sheet__close"
-            onClick={onClose}
-          >
-            ✕
-          </button>
-          <span className="comments-sheet__title">
-            Comments
-            {comments.length > 0 && (
-              <span style={{ fontWeight: 400, fontSize: '13px', color: 'var(--ig-secondary)', marginLeft: '6px' }}>
-                ({comments.length})
-              </span>
-            )}
-          </span>
-          {/* spacer to centre title */}
-          <div style={{ width: 32 }} />
-        </div>
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-3 border-b border-white/30">
+            <button className="btn-icon text-slate-500" onClick={onClose} aria-label="Close">
+              <X size={18} />
+            </button>
+            <span className="text-sm font-semibold text-slate-800">
+              Comments
+              {comments.length > 0 && (
+                <span className="text-slate-400 font-normal ml-1.5">({comments.length})</span>
+              )}
+            </span>
+            {/* spacer to centre title */}
+            <div className="w-9" />
+          </div>
 
-        {/* Comments list */}
-        <div className="comments-sheet__list">
-          {loading
-            ? <div className="loading" style={{ padding: '30px 0' }}><div className="loading-spinner" /></div>
-            : comments.length === 0
-              ? <div style={{ textAlign: 'center', color: 'var(--ig-secondary)', padding: '40px 0', fontSize: '14px' }}>
-                  <div style={{ fontSize: '36px', marginBottom: '8px' }}>💬</div>
-                  <p style={{ margin: 0 }}>No comments yet. Be the first!</p>
-                </div>
-              : comments.map(c => {
-                  const name  = names[c.userId] || c.userId.slice(0, 8) + '…';
+          {/* Comment list */}
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-1">
+            {loading ? (
+              <div className="flex justify-center py-10">
+                <div className="w-8 h-8 rounded-full border-4 border-indigo-100 border-t-indigo-500 animate-spin" />
+              </div>
+            ) : comments.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-14 gap-3 text-slate-400">
+                <MessageCircle size={36} className="opacity-40" />
+                <p className="text-sm font-medium">No comments yet. Be the first!</p>
+              </div>
+            ) : (
+              <motion.div
+                variants={staggerListVariants}
+                initial="hidden"
+                animate="visible"
+                className="space-y-1"
+              >
+                {comments.map(c => {
+                  const name  = names[c.userId]  || c.userId.slice(0, 8) + '…';
                   const photo = photos[c.userId];
                   const isOwn = c.userId === me;
                   return (
-                    <div key={c.id} className="comments-sheet__item">
-                      <div className="comments-sheet__avatar">
+                    <motion.div
+                      key={c.id}
+                      variants={staggerItemVariants}
+                      className="flex items-start gap-3 p-3 rounded-2xl hover:bg-white/30 transition-colors group"
+                    >
+                      {/* Avatar */}
+                      <div className="w-9 h-9 rounded-full flex-shrink-0 overflow-hidden bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center text-white text-sm font-bold ring-2 ring-white/60">
                         {photo
-                          ? <img src={photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          : name.charAt(0).toUpperCase()}
+                          ? <img src={photo} alt="" className="w-full h-full object-cover" />
+                          : name.charAt(0).toUpperCase()
+                        }
                       </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>
-                          <span style={{ fontWeight: 700, fontSize: '13px' }}>{name}</span>
-                          <span style={{ fontSize: '11px', color: 'var(--ig-secondary)' }}>{timeAgo(c.createdAt)}</span>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-slate-800">{name}</span>
+                          <span className="text-[11px] text-slate-400">{timeAgo(c.createdAt)}</span>
                         </div>
-                        <p style={{ margin: '2px 0 0', fontSize: '14px', lineHeight: 1.4, wordBreak: 'break-word' }}>{c.text}</p>
+                        <p className="mt-0.5 text-sm text-slate-700 leading-relaxed break-words">{c.text}</p>
                       </div>
+
+                      {/* Delete (own comments only) */}
                       {isOwn && (
                         <button
                           onClick={() => handleDelete(c.id)}
-                          title="Delete"
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ig-secondary)', fontSize: '13px', opacity: 0.6, flexShrink: 0 }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-rose-500 p-1 rounded-lg hover:bg-rose-50"
+                          aria-label="Delete comment"
                         >
-                          🗑️
+                          <Trash2 size={14} />
                         </button>
                       )}
-                    </div>
+                    </motion.div>
                   );
-                })
-          }
-          <div ref={bottomRef} />
-        </div>
+                })}
+                <div ref={bottomRef} />
+              </motion.div>
+            )}
+          </div>
 
-        {/* Input */}
-        <div className="comments-sheet__input-row">
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
-            placeholder="Add a comment…"
-            className="comments-sheet__input"
-            autoFocus
-          />
-          <button
-            onClick={handleSubmit}
-            disabled={!input.trim() || submitting}
-            className="comments-sheet__post-btn"
-            style={{ color: input.trim() ? 'var(--ig-blue)' : 'var(--ig-secondary)' }}
-          >
-            {submitting ? '…' : 'Post'}
-          </button>
-        </div>
-        {submitError && (
-          <p style={{ color: '#ef4444', fontSize: '12px', margin: '0 18px 8px', padding: 0 }}>{submitError}</p>
-        )}
-      </div>
-    </div>
+          {/* Input row */}
+          <div className="border-t border-white/30 px-4 py-3 pb-safe">
+            {submitError && (
+              <p className="text-xs text-rose-500 mb-2 px-1">{submitError}</p>
+            )}
+            <div className="flex items-center gap-2">
+              <input
+                ref={inputRef}
+                type="text"
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
+                placeholder="Add a comment…"
+                className="input-glass flex-1 text-sm"
+                style={{ borderRadius: '1rem' }}
+                autoFocus
+              />
+              <button
+                onClick={handleSubmit}
+                disabled={!input.trim() || submitting}
+                className="btn-icon disabled:opacity-40"
+                style={{
+                  background: input.trim() ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : undefined,
+                  color: input.trim() ? 'white' : undefined,
+                }}
+                aria-label="Post comment"
+              >
+                {submitting
+                  ? <span className="w-4 h-4 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" />
+                  : <Send size={16} />
+                }
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 };

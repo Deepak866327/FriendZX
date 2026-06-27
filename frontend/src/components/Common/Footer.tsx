@@ -1,45 +1,66 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
+import { Globe, MessageCircle, Code2 } from 'lucide-react';
+import { Logo } from '@/components/Common/Logo';
 
 export const Footer: React.FC = () => {
-  const currentYear = new Date().getFullYear();
+  const year = new Date().getFullYear();
 
   return (
-    <footer className="footer">
-      <div className="footer-container">
-        <div className="footer-content">
-          <div className="footer-section">
-            <h3 style={{ fontFamily: "'Dancing Script', cursive", background: 'var(--grad)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>freindzX</h3>
-            <p>Connect with people near you. Find your perfect match.</p>
+    <footer className="px-4 py-6">
+      <div className="glass rounded-2xl p-6 max-w-5xl mx-auto">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-5">
+
+          {/* Brand */}
+          <div className="flex flex-col items-center sm:items-start gap-1">
+            <Logo variant="full" size="sm" />
+            <p className="text-xs text-slate-400 mt-1">Find your people, nearby.</p>
           </div>
 
-          <div className="footer-section">
-            <h4>Quick Links</h4>
-            <ul>
-              <li><a href="/about">About</a></li>
-              <li><a href="/privacy">Privacy Policy</a></li>
-              <li><a href="/terms">Terms of Service</a></li>
-              <li><a href="/contact">Contact</a></li>
-            </ul>
+          {/* Nav links */}
+          <div className="flex flex-wrap justify-center gap-x-5 gap-y-1.5">
+            {[
+              { label: 'Login', to: '/login', internal: true },
+              { label: 'Register', to: '/register', internal: true },
+              { label: 'Privacy', to: '/privacy', internal: false },
+              { label: 'Terms', to: '/terms', internal: false },
+              { label: 'Contact', to: '/contact', internal: false },
+            ].map(({ label, to, internal }) =>
+              internal ? (
+                <Link key={label} to={to} className="text-xs text-slate-500 hover:text-indigo-600 transition-colors font-medium">
+                  {label}
+                </Link>
+              ) : (
+                <a key={label} href={to} className="text-xs text-slate-500 hover:text-indigo-600 transition-colors font-medium">
+                  {label}
+                </a>
+              )
+            )}
           </div>
 
-          <div className="footer-section">
-            <h4>Follow Us</h4>
-            <div className="social-links">
-              <a href="https://twitter.com" target="_blank" rel="noreferrer">
-                Twitter
+          {/* Social icons */}
+          <div className="flex items-center gap-2">
+            {[
+              { Icon: Globe,          href: 'https://twitter.com',   label: 'Twitter'   },
+              { Icon: MessageCircle, href: 'https://instagram.com', label: 'Instagram' },
+              { Icon: Code2,         href: 'https://github.com',    label: 'GitHub'    },
+            ].map(({ Icon, href, label }) => (
+              <a
+                key={label}
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={label}
+                className="btn-icon w-8 h-8 rounded-xl"
+              >
+                <Icon size={14} />
               </a>
-              <a href="https://facebook.com" target="_blank" rel="noreferrer">
-                Facebook
-              </a>
-              <a href="https://instagram.com" target="_blank" rel="noreferrer">
-                Instagram
-              </a>
-            </div>
+            ))}
           </div>
         </div>
 
-        <div className="footer-bottom">
-          <p>&copy; {currentYear} freindzX. All rights reserved.</p>
+        <div className="mt-5 pt-4 border-t border-white/40 text-center text-xs text-slate-400">
+          © {year} FriendZX. All rights reserved.
         </div>
       </div>
     </footer>

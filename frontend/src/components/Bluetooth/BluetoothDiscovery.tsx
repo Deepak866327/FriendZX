@@ -243,7 +243,11 @@ export const BluetoothDiscovery: React.FC = () => {
               </div>
             </div>
 
-            <div className="divider">or enter theirs</div>
+            <div className="flex items-center gap-2 my-1">
+              <div className="flex-1 h-px bg-slate-200" />
+              <span className="text-xs text-slate-400 font-medium px-2">or enter theirs</span>
+              <div className="flex-1 h-px bg-slate-200" />
+            </div>
 
             {/* Enter peer's code */}
             <div>

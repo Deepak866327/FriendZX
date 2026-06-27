@@ -135,8 +135,8 @@ export const ProfileEditor: React.FC = () => {
 
         {/* Feedback */}
         {error && (
-          <div className="glass rounded-xl px-4 py-3 border border-red-200/60 bg-red-50/60">
-            <p className="text-sm text-red-600">{error}</p>
+          <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-rose-50/70 border border-rose-200/60">
+            <p className="text-sm text-rose-600">{error}</p>
           </div>
         )}
         {saved && (

@@ -94,7 +94,7 @@ export const NearbyUsers: React.FC = () => {
   if (nearbyUsers.length === 0) {
     return (
       <div className="glass rounded-2xl p-10 flex flex-col items-center gap-3 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-white/60 flex items-center justify-center">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center">
           <Users size={26} className="text-indigo-300" />
         </div>
         <div>
