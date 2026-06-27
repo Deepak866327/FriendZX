@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ASPECT_RATIOS, AspectRatioKey } from '@/components/Common/ImageCropper';
+import { getApiToken } from '@/services/api';
 
 type Visibility = 'public' | 'friends' | 'nearby';
 
@@ -70,7 +71,7 @@ export const CreateCrationModal: React.FC<CreateCrationModalProps> = ({ onClose,
 
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        const token = localStorage.getItem('auth_token') || '';
+        const token = getApiToken() || '';
         xhr.open('POST', '/api/crations');
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
         xhr.upload.onprogress = (ev) => {

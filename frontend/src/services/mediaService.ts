@@ -1,5 +1,4 @@
-import { apiClient } from './api';
-import { storage } from '@/utils/storage';
+import { apiClient, getApiToken } from './api';
 
 export type MediaType = 'IMAGE' | 'VIDEO';
 export type ProcessingStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
@@ -77,7 +76,7 @@ export async function uploadToPresignedUrl(
       // Prefix /api so it routes through the API gateway → post-service.
       const url = config.uploadUrl.startsWith('/api') ? config.uploadUrl : `/api${config.uploadUrl}`;
       xhr.open('PUT', url);
-      const token = storage.getToken();
+      const token = getApiToken();
       if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       xhr.setRequestHeader('Content-Type', file.type);
       xhr.send(file);

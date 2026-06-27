@@ -1,4 +1,5 @@
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import session from 'express-session';
 import RedisStore from 'connect-redis';
 import Redis from 'ioredis';
@@ -61,6 +62,7 @@ function generateOtp(): string {
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // Session backed by Redis — only used for the OAuth state handshake (10 min)
 const sessionRedis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
@@ -227,6 +229,59 @@ app.get('/username/check/:username', async (req, res) => {
   res.json({ available: !existing });
 });
 
+// POST /refresh — issue a new access token from the HttpOnly refresh token cookie.
+// The refresh token is never sent in the request body; the browser attaches the cookie automatically.
+app.post('/refresh', async (req, res) => {
+  const refreshToken = req.cookies?.refresh_token;
+  if (!refreshToken) {
+    return res.status(401).json({ error: 'No refresh token' });
+  }
+
+  try {
+    const jwt = await import('jsonwebtoken');
+    const decoded = jwt.verify(
+      refreshToken,
+      process.env.JWT_REFRESH_SECRET || 'refresh-secret',
+    ) as any;
+
+    const user = await userRepository.findById(decoded.id);
+    if (!user || !user.isActive) {
+      res.clearCookie('refresh_token', { path: '/' });
+      return res.status(401).json({ error: 'Invalid session' });
+    }
+
+    const newAccessToken = jwt.sign(
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET || 'secret',
+      { expiresIn: (process.env.JWT_EXPIRY || '24h') as any },
+    );
+
+    // Rotate the refresh token on every use — if the old token is stolen and used
+    // first, the legitimate user's next refresh will fail, alerting them to log in again.
+    const newRefreshToken = jwt.sign(
+      { id: user.id },
+      process.env.JWT_REFRESH_SECRET || 'refresh-secret',
+      { expiresIn: (process.env.JWT_REFRESH_EXPIRY || '7d') as any },
+    );
+
+    res.cookie('refresh_token', newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    res.json({
+      token: newAccessToken,
+      user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, username: user.username },
+    });
+  } catch {
+    res.clearCookie('refresh_token', { path: '/' });
+    return res.status(401).json({ error: 'Refresh token expired or invalid' });
+  }
+});
+
 // POST /register — override to verify OTP then delegate to use case
 app.post('/register', async (req, res) => {
   const { email, password, firstName, lastName, username, phoneNumber, otp } = req.body;
@@ -247,9 +302,19 @@ app.post('/register', async (req, res) => {
   }
 
   try {
-    const result = await registerUseCase.execute({ email, password, firstName, lastName: lastName || '', username, phoneNumber, otp });
+    const { token, refreshToken, user } = await registerUseCase.execute({ email, password, firstName, lastName: lastName || '', username, phoneNumber, otp });
     await redis.del(`otp:${email}`);
-    res.status(201).json(result);
+
+    // Same HttpOnly cookie pattern as login
+    res.cookie('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    res.status(201).json({ token, user });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }

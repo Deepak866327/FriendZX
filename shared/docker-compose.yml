@@ -123,14 +123,20 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+      # Limit JVM heap — prevents OOM crash on Docker Desktop (WSL2 default 2 GB RAM)
+      ZOOKEEPER_HEAP_OPTS: "-Xmx256m -Xms128m"
     ports:
       - "2181:2181"
     healthcheck:
-      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/2181"]
+      # "srvr" is whitelisted by default in cp-zookeeper and returns "Mode: standalone"
+      # only after ZooKeeper has fully initialized. This is stronger than the old
+      # /dev/tcp check which passed as soon as the port opened (before ZK was ready),
+      # causing Kafka to connect too early and exit(1).
+      test: ["CMD-SHELL", "echo srvr | nc -w 2 localhost 2181 | grep -q 'Mode: standalone'"]
       interval: 10s
       timeout: 10s
-      retries: 10
-      start_period: 30s
+      retries: 15
+      start_period: 60s
     networks:
       - microservices-network
 
@@ -149,15 +155,17 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # Limit JVM heap — prevents OOM crash on Docker Desktop (WSL2 default 2 GB RAM)
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
     ports:
       - "9092:9092"
       - "29092:29092"
     healthcheck:
-      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9092"]
-      interval: 10s
-      timeout: 10s
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 15s
       retries: 10
-      start_period: 40s
+      start_period: 60s
     networks:
       - microservices-network
 

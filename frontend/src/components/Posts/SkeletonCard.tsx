@@ -1,21 +1,28 @@
 import React from 'react';
 
 export const SkeletonCard: React.FC = () => (
-  <div className="post-card post-card--skeleton">
-    <div className="post-card__header">
-      <div className="skeleton skeleton--circle" style={{ width: 36, height: 36 }} />
-      <div style={{ flex: 1, marginLeft: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div className="skeleton skeleton--text" style={{ width: '40%' }} />
-        <div className="skeleton skeleton--text" style={{ width: '20%', height: 10 }} />
+  <div className="glass rounded-2xl overflow-hidden mb-3 p-4">
+    {/* Header */}
+    <div className="flex items-center gap-3 mb-4">
+      <div className="skeleton w-9 h-9 rounded-full flex-shrink-0" />
+      <div className="flex-1 flex flex-col gap-2">
+        <div className="skeleton h-3 rounded-full w-2/5" />
+        <div className="skeleton h-2.5 rounded-full w-1/5" />
       </div>
     </div>
-    <div className="skeleton skeleton--image" style={{ width: '100%', paddingTop: '100%', borderRadius: 8, marginTop: 12 }} />
-    <div style={{ marginTop: 12, display: 'flex', gap: 16 }}>
-      <div className="skeleton skeleton--text" style={{ width: 48 }} />
-      <div className="skeleton skeleton--text" style={{ width: 48 }} />
-      <div className="skeleton skeleton--text" style={{ width: 48 }} />
+
+    {/* Image placeholder */}
+    <div className="skeleton rounded-xl w-full" style={{ paddingTop: '75%' }} />
+
+    {/* Actions row */}
+    <div className="flex gap-3 mt-3">
+      <div className="skeleton h-5 w-10 rounded-full" />
+      <div className="skeleton h-5 w-10 rounded-full" />
+      <div className="skeleton h-5 w-10 rounded-full" />
     </div>
-    <div className="skeleton skeleton--text" style={{ width: '70%', marginTop: 10 }} />
-    <div className="skeleton skeleton--text" style={{ width: '50%', marginTop: 6 }} />
+
+    {/* Caption lines */}
+    <div className="skeleton h-3 rounded-full w-3/4 mt-3" />
+    <div className="skeleton h-3 rounded-full w-1/2 mt-2" />
   </div>
 );

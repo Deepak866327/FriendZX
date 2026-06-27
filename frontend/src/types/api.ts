@@ -7,7 +7,7 @@ export interface ApiResponse<T> {
 
 export interface AuthResponse {
   token: string;
-  refreshToken: string;
+  refreshToken?: string; // no longer in the body — lives in an HttpOnly cookie
   user: User;
 }
 

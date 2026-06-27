@@ -1,54 +1,62 @@
 import { AUTH_STORAGE_KEYS } from './constants';
 
+// ── Storage strategy ──────────────────────────────────────────────────────────
+//  Access token  → sessionStorage  (tab-isolated; prevents cross-tab user leakage)
+//  Refresh token → HttpOnly cookie (set by backend; JS cannot read it)
+//  User profile  → sessionStorage  (tab-isolated; non-sensitive display data)
+//  Theme         → localStorage    (intentionally shared; not sensitive)
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const storage = {
-  // Token management
+  // ── Access token (short-lived JWT) ─────────────────────────────────────────
+  // Kept in sessionStorage so each tab has its own independent token.
+  // A cookie-based refresh token is domain-wide; if we refreshed on every page
+  // load we'd get whichever account last logged in. By caching the token here
+  // per-tab, we only call /refresh when the token is actually expired/missing.
   setToken: (token: string) => {
-    localStorage.setItem(AUTH_STORAGE_KEYS.TOKEN, token);
+    sessionStorage.setItem(AUTH_STORAGE_KEYS.TOKEN, token);
   },
 
   getToken: (): string | null => {
-    return localStorage.getItem(AUTH_STORAGE_KEYS.TOKEN);
+    return sessionStorage.getItem(AUTH_STORAGE_KEYS.TOKEN);
   },
 
   removeToken: () => {
-    localStorage.removeItem(AUTH_STORAGE_KEYS.TOKEN);
+    sessionStorage.removeItem(AUTH_STORAGE_KEYS.TOKEN);
   },
 
-  // Refresh token management
-  setRefreshToken: (token: string) => {
-    localStorage.setItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN, token);
-  },
-
-  getRefreshToken: (): string | null => {
-    return localStorage.getItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN);
-  },
-
-  removeRefreshToken: () => {
-    localStorage.removeItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN);
-  },
-
-  // User management
+  // ── User profile ────────────────────────────────────────────────────────────
   setUser: (user: any) => {
-    localStorage.setItem(AUTH_STORAGE_KEYS.USER, JSON.stringify(user));
+    sessionStorage.setItem(AUTH_STORAGE_KEYS.USER, JSON.stringify(user));
   },
 
   getUser: (): any => {
-    const user = localStorage.getItem(AUTH_STORAGE_KEYS.USER);
+    const user = sessionStorage.getItem(AUTH_STORAGE_KEYS.USER);
     return user ? JSON.parse(user) : null;
   },
 
   removeUser: () => {
-    localStorage.removeItem(AUTH_STORAGE_KEYS.USER);
+    sessionStorage.removeItem(AUTH_STORAGE_KEYS.USER);
   },
 
-  // Clear all auth data
+  // ── Clear all client-side auth state ───────────────────────────────────────
+  // The HttpOnly refresh_token cookie is cleared server-side by /auth/logout.
   clearAuth: () => {
     storage.removeToken();
-    storage.removeRefreshToken();
     storage.removeUser();
   },
 
-  // Session management
+  // ── One-time migration cleanup ──────────────────────────────────────────────
+  // Before the HttpOnly cookie migration, tokens were stored in localStorage.
+  // This runs on every app start and silently removes those stale keys so they
+  // don't confuse developers inspecting DevTools Application → Storage.
+  clearOldLocalStorage: () => {
+    localStorage.removeItem(AUTH_STORAGE_KEYS.TOKEN);
+    localStorage.removeItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN);
+    localStorage.removeItem(AUTH_STORAGE_KEYS.USER);
+  },
+
+  // ── Generic session helpers ─────────────────────────────────────────────────
   setSessionData: (key: string, value: any) => {
     sessionStorage.setItem(key, JSON.stringify(value));
   },

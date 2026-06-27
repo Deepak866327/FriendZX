@@ -1,5 +1,7 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
+import { pageVariants } from '@/utils/animations';
 import { AuthProvider } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { SocketProvider } from '@/context/SocketContext';
@@ -14,6 +16,7 @@ import { CallOverlay } from '@/components/Call/CallOverlay';
 import { ChallengeResultBanner } from '@/components/Challenge/ChallengeResultBanner';
 import { ErrorBoundary } from '@/components/Common/ErrorBoundary';
 import { useAuth } from '@/hooks/useAuth';
+import { LandingPage } from '@/pages/LandingPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { AuthCallbackPage } from '@/pages/AuthCallbackPage';
@@ -27,8 +30,24 @@ import { Header } from '@/components/Common/Header';
 import { BottomActionBar } from '@/components/Common/BottomActionBar';
 import './App.css';
 
+/* Redirect authenticated users away from the landing page to the app */
+const RootRoute: React.FC = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="loading-spinner" />
+      </div>
+    );
+  }
+
+  return isAuthenticated ? <Navigate to="/dashboard" replace /> : <LandingPage />;
+};
+
 const ProtectedLayout: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return <div className="loading"><div className="loading-spinner"></div></div>;
@@ -47,9 +66,24 @@ const ProtectedLayout: React.FC = () => {
             <ChallengeProvider>
             <UserProvider>
               <LocationProvider>
+                {/* Shared background blobs — fixed, persist across page transitions */}
+                <div className="fx-bg-blob-1" />
+                <div className="fx-bg-blob-2" />
+                <div className="fx-bg-blob-3" />
                 <Header />
                 <div className="main-content">
-                  <Outlet />
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.div
+                      key={location.pathname}
+                      variants={pageVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      style={{ minHeight: 0 }}
+                    >
+                      <Outlet />
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
                 <CallOverlay />
                 <ChallengeResultBanner />
@@ -82,7 +116,7 @@ function App() {
             <Route path="/messages" element={<ErrorBoundary><MessagesPage /></ErrorBoundary>} />
             <Route path="/feed" element={<ErrorBoundary><FeedPage /></ErrorBoundary>} />
           </Route>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<RootRoute />} />
         </Routes>
       </AuthProvider>
       </ThemeProvider>

@@ -15,29 +15,19 @@ export const authService = {
     return res.data;
   },
 
-  // Register new user
+  // Register new user — backend sets refresh_token HttpOnly cookie, returns { token, user }
   register: async (credentials: RegisterCredentials): Promise<AuthResponse> => {
     const response = await apiClient.post<AuthResponse>('/auth/register', credentials);
     const data = response.data;
-
-    // Store tokens and user
-    storage.setToken(data.token);
-    storage.setRefreshToken(data.refreshToken);
     storage.setUser(data.user);
-
     return data;
   },
 
-  // Login user
+  // Login — backend sets refresh_token HttpOnly cookie, returns { token, user }
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
     const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
     const data = response.data;
-
-    // Store tokens and user
-    storage.setToken(data.token);
-    storage.setRefreshToken(data.refreshToken);
     storage.setUser(data.user);
-
     return data;
   },
 
@@ -47,7 +37,7 @@ export const authService = {
     return response.data;
   },
 
-  // Logout user
+  // Logout — backend clears the HttpOnly cookie; we clear user from sessionStorage
   logout: async (): Promise<void> => {
     try {
       await apiClient.post('/auth/logout');
@@ -56,42 +46,17 @@ export const authService = {
     }
   },
 
-  // Check if user is authenticated
-  isAuthenticated: (): boolean => {
-    return !!storage.getToken();
-  },
-
-  // Get current user from storage
-  getCurrentUser: (): User | null => {
-    return storage.getUser();
-  },
-
-  // Get auth token
-  getToken: (): string | null => {
-    return storage.getToken();
+  // Silent refresh — browser auto-sends the HttpOnly refresh_token cookie, no body needed.
+  // Returns a new { token, user } pair. Called on app mount to restore session after page reload.
+  refreshToken: async (): Promise<AuthResponse> => {
+    const response = await apiClient.post<AuthResponse>('/auth/refresh');
+    const data = response.data;
+    storage.setUser(data.user);
+    return data;
   },
 
   // Change password
   changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
     await apiClient.post('/auth/change-password', { currentPassword, newPassword });
-  },
-
-  // Refresh token
-  refreshToken: async (): Promise<AuthResponse> => {
-    const refreshToken = storage.getRefreshToken();
-    if (!refreshToken) {
-      throw new Error('No refresh token available');
-    }
-
-    const response = await apiClient.post<AuthResponse>('/auth/refresh', {
-      refreshToken,
-    });
-    const data = response.data;
-
-    storage.setToken(data.token);
-    storage.setRefreshToken(data.refreshToken);
-    storage.setUser(data.user);
-
-    return data;
   },
 };

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { FileText } from 'lucide-react';
 import { Post, FeedPage } from '@/services/postService';
 import { Cration, CrationPage } from '@/services/crationService';
 import { PostCard } from './PostCard';
@@ -78,7 +79,6 @@ export const MixedFeed: React.FC<MixedFeedProps> = ({
     }
   }, [postFetcher, crationFetcher, postHasMore, crationHasMore]);
 
-  // Reset on fetcher / refresh change
   useEffect(() => {
     setItems([]);
     setPostCursor(undefined);
@@ -88,7 +88,6 @@ export const MixedFeed: React.FC<MixedFeedProps> = ({
     load(undefined, 1, true);
   }, [postFetcher, crationFetcher, refreshKey]);
 
-  // Infinite scroll sentinel
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
@@ -104,13 +103,20 @@ export const MixedFeed: React.FC<MixedFeedProps> = ({
     setItems(prev => prev.filter(i => !(i.type === 'post' && i.id === id)));
 
   if (!loading && !error && items.length === 0) {
-    return <p className="feed-empty">Nothing here yet.</p>;
+    return (
+      <div className="glass rounded-2xl p-10 flex flex-col items-center gap-3 text-slate-400 mt-4">
+        <div className="w-12 h-12 rounded-2xl bg-white/60 flex items-center justify-center">
+          <FileText size={22} className="text-indigo-300" />
+        </div>
+        <p className="text-sm font-medium">Nothing here yet — be the first to post!</p>
+      </div>
+    );
   }
 
   const hasMore = postHasMore || crationHasMore;
 
   return (
-    <div className="mixed-feed">
+    <div>
       {items.map(item =>
         item.type === 'post' ? (
           <PostCard key={`post-${item.id}`} post={item.data} onDelete={handleDeletePost} />
@@ -120,10 +126,18 @@ export const MixedFeed: React.FC<MixedFeedProps> = ({
       )}
 
       {loading && <><SkeletonCard /><SkeletonCard /></>}
-      {error   && <p className="feed-error">{error}</p>}
+
+      {error && (
+        <div className="glass rounded-2xl px-4 py-3 text-sm text-red-500 text-center mt-2">
+          {error}
+        </div>
+      )}
 
       {!loading && hasMore && <div ref={sentinelRef} style={{ height: 1 }} />}
-      {!hasMore && items.length > 0 && <p className="feed-end">You're all caught up</p>}
+
+      {!hasMore && items.length > 0 && (
+        <p className="text-center text-xs text-slate-400 py-6">You're all caught up</p>
+      )}
     </div>
   );
 };

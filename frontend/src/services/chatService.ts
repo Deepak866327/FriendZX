@@ -1,6 +1,5 @@
-import { apiClient } from './api';
+import { apiClient, getApiToken } from './api';
 import { ChatMessage, ConversationEntry, ChatMsgType, ChatAttachment } from '@/types/api';
-import { storage } from '@/utils/storage';
 
 export const chatService = {
   getChatHistory: async (toUserId: string, limit = 50): Promise<ChatMessage[]> => {
@@ -50,7 +49,7 @@ export const chatService = {
       const { XMLHttpRequest: XHR } = window;
       const xhr = new XHR();
 
-      const token = storage.getToken() || '';
+      const token = getApiToken() || '';
       xhr.open('POST', '/api/notifications/chat/upload');
       if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 

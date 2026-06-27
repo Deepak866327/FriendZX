@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Globe, Lock, MapPin, Users, MessageCircle, UserPlus, Check, Video, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocation } from '@/hooks/useLocation';
 import { NearbyUsers } from '@/components/Location/NearbyUsers';
@@ -20,31 +21,52 @@ import { PublicProfile } from '@/types/api';
 
 type FeedTab = 'public' | 'friends' | 'nearby' | 'community';
 
+/* Deterministic gradient per userId */
+const GRADIENTS = [
+  'from-indigo-500 to-violet-600',
+  'from-violet-500 to-purple-600',
+  'from-sky-400 to-blue-500',
+  'from-pink-500 to-rose-500',
+  'from-amber-400 to-orange-500',
+  'from-emerald-400 to-teal-500',
+];
+function avatarGradient(uid: string) {
+  const n = uid.charCodeAt(0) + uid.charCodeAt(uid.length - 1);
+  return GRADIENTS[n % GRADIENTS.length];
+}
+
+const FEED_TABS: { key: FeedTab; label: string; Icon: React.FC<{ size?: number }> }[] = [
+  { key: 'public',    label: 'Public',    Icon: ({ size }) => <Globe size={size} /> },
+  { key: 'friends',   label: 'Friends',   Icon: ({ size }) => <Lock size={size} /> },
+  { key: 'nearby',    label: 'Nearby',    Icon: ({ size }) => <MapPin size={size} /> },
+  { key: 'community', label: 'Community', Icon: ({ size }) => <Users size={size} /> },
+];
+
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
   const { nearbyUsers } = useLocation();
   const navigate = useNavigate();
 
-  const [feedTab, setFeedTab] = useState<FeedTab>('public');
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [feedTab,       setFeedTab]       = useState<FeedTab>('public');
+  const [refreshKey,    setRefreshKey]    = useState(0);
+  const [userLocation,  setUserLocation]  = useState<{ latitude: number; longitude: number } | null>(null);
 
   const [communityPostTarget, setCommunityPostTarget] = useState<Community[] | null>(null);
-  const [nearbyRooms, setNearbyRooms] = useState<VideoRoom[]>([]);
-  const [activeRoom, setActiveRoom] = useState<VideoRoom | null>(null);
+  const [nearbyRooms,         setNearbyRooms]         = useState<VideoRoom[]>([]);
+  const [activeRoom,          setActiveRoom]          = useState<VideoRoom | null>(null);
 
   const [sidebarProfiles, setSidebarProfiles] = useState<Record<string, PublicProfile>>({});
-  const [addedFriends, setAddedFriends] = useState<Set<string>>(new Set());
-  const [addingId, setAddingId] = useState<string | null>(null);
-  const [chatTarget, setChatTarget] = useState<PublicProfile | null>(null);
-  const [nearbyModal, setNearbyModal] = useState(false);
+  const [addedFriends,    setAddedFriends]    = useState<Set<string>>(new Set());
+  const [addingId,        setAddingId]        = useState<string | null>(null);
+  const [chatTarget,      setChatTarget]      = useState<PublicProfile | null>(null);
+  const [nearbyModal,     setNearbyModal]     = useState(false);
   const [selectedCration, setSelectedCration] = useState<Cration | null>(null);
 
   useEffect(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) => setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-      () => {}
+      pos => setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      () => {},
     );
   }, []);
 
@@ -79,7 +101,9 @@ export const DashboardPage: React.FC = () => {
       .catch(() => {});
   }, [userLocation, feedTab, refreshKey]);
 
-  const displayName = user ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || 'User' : 'User';
+  const displayName = user
+    ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || 'User'
+    : 'User';
 
   const handleJoinRoom = useCallback(async (room: VideoRoom) => {
     setActiveRoom(room);
@@ -102,42 +126,50 @@ export const DashboardPage: React.FC = () => {
       if (!userLocation) return Promise.resolve({ crations: [], total: 0, page: 1, hasMore: false });
       return crationService.getNearbyFeed(userLocation.latitude, userLocation.longitude, page);
     },
-    [userLocation]
+    [userLocation],
   );
 
-  const FEED_TABS: { key: FeedTab; label: string; icon: string }[] = [
-    { key: 'public',    label: 'Public',    icon: '🌐' },
-    { key: 'friends',   label: 'Friends',   icon: '🔒' },
-    { key: 'nearby',    label: 'Nearby',    icon: '📍' },
-    { key: 'community', label: 'Community', icon: '🏘️' },
-  ];
-
   return (
-    <div className="dashboard-page">
-      <div className="dashboard-layout">
-        {/* Feed column */}
-        <div className="dashboard-feed">
-          <div className="feed-page__header">
-            <h1>Home</h1>
-          </div>
+    <div className="pb-24 pt-3">
+      <div className="max-w-5xl xl:max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="flex gap-6 items-start">
 
-          {/* Story bar */}
-          <StoryBar refreshKey={refreshKey} userLocation={userLocation} />
+          {/* ══════════════════════════════════════════
+              FEED COLUMN
+          ══════════════════════════════════════════ */}
+          <div className="flex-1 min-w-0">
 
-          <div className="feed-tabs">
-            {FEED_TABS.map(({ key, label, icon }) => (
-              <button
-                key={key}
-                className={`feed-tab feed-tab--${key} ${feedTab === key ? 'active' : ''}`}
-                onClick={() => setFeedTab(key)}
-              >
-                <span className="feed-tab__icon">{icon}</span>
-                <span className="feed-tab__label">{label}</span>
-              </button>
-            ))}
-          </div>
+            {/* Greeting */}
+            <div className="mb-4">
+              <h1 className="text-xl font-bold text-slate-800">
+                Hi, <span className="gradient-text">{user?.firstName || displayName}</span> 👋
+              </h1>
+              <p className="text-sm text-slate-400 mt-0.5">Here's what's happening around you</p>
+            </div>
 
-          <div className="feed-content">
+            {/* Story bar */}
+            <StoryBar refreshKey={refreshKey} userLocation={userLocation} />
+
+            {/* Feed tabs */}
+            <div className="glass rounded-xl p-1 flex gap-1 overflow-x-auto scrollbar-none mb-4 -mx-1 px-1">
+              {FEED_TABS.map(({ key, label, Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setFeedTab(key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-200 flex-shrink-0 ${
+                    feedTab === key
+                      ? 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                  }`}
+                  style={{ minHeight: 34 }}
+                >
+                  <Icon size={12} />
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Feed content */}
             {feedTab === 'public' && (
               <MixedFeed
                 postFetcher={publicFetcher}
@@ -157,18 +189,21 @@ export const DashboardPage: React.FC = () => {
             {feedTab === 'nearby' && (
               <>
                 {nearbyRooms.length > 0 && (
-                  <div className="nearby-rooms-section">
-                    <div className="nearby-rooms-section__header">
-                      <span className="nearby-rooms-section__title">📹 Live Video Calls Nearby</span>
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Video size={14} className="text-indigo-500" />
+                      <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Live Calls Nearby</span>
                     </div>
-                    {nearbyRooms.map(room => (
-                      <RandomCallCard
-                        key={room.id}
-                        room={room}
-                        currentUserId={user?.id}
-                        onJoin={handleJoinRoom}
-                      />
-                    ))}
+                    <div className="flex flex-col gap-2">
+                      {nearbyRooms.map(room => (
+                        <RandomCallCard
+                          key={room.id}
+                          room={room}
+                          currentUserId={user?.id}
+                          onJoin={handleJoinRoom}
+                        />
+                      ))}
+                    </div>
                   </div>
                 )}
                 <MixedFeed
@@ -181,90 +216,135 @@ export const DashboardPage: React.FC = () => {
             )}
             {feedTab === 'community' && (
               <CommunityFeed
-                onPostInCommunity={(communities) => setCommunityPostTarget(communities)}
+                onPostInCommunity={communities => setCommunityPostTarget(communities)}
                 userLocation={userLocation}
                 refreshKey={refreshKey}
               />
             )}
           </div>
-        </div>
 
-        {/* Sidebar — desktop only */}
-        <div className="dashboard-sidebar">
+          {/* ══════════════════════════════════════════
+              SIDEBAR — desktop only (lg+)
+          ══════════════════════════════════════════ */}
           {nearbyUsers.length > 0 && (
-            <div>
-              <div className="sidebar-suggestions-header">
-                <span className="sidebar-suggestions-title">Suggested For You</span>
-                <button className="sidebar-see-all">See All</button>
-              </div>
-              {nearbyUsers.slice(0, 5).map(u => {
-                const p = sidebarProfiles[u.userId];
-                const displayName = p?.firstName
-                  ? `${p.firstName}${p.lastName ? ' ' + p.lastName : ''}`
-                  : u.userId.slice(0, 10) + '…';
-                const initial = (p?.firstName || u.userId).charAt(0).toUpperCase();
-                const isFriend = addedFriends.has(u.userId);
-                const isAdding = addingId === u.userId;
+            <div className="hidden lg:block w-[300px] flex-shrink-0 sticky top-[72px]">
+              <div className="glass rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-slate-700">Suggested for you</h3>
+                  <button
+                    onClick={() => setNearbyModal(true)}
+                    className="text-xs font-semibold text-indigo-500 hover:text-indigo-700 transition-colors"
+                  >
+                    See all
+                  </button>
+                </div>
 
-                return (
-                  <div key={u.userId} className="suggested-user">
-                    <div className="suggested-avatar">
-                      {p?.photos?.[0]
-                        ? <img src={p.photos[0]} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                        : initial}
-                    </div>
-                    <div className="suggested-info">
-                      <div className="suggested-username">{displayName}</div>
-                      {p?.username && <div style={{ fontSize: '11px', color: 'var(--ig-secondary)' }}>@{p.username}</div>}
-                      <div className="suggested-meta">
-                        {u.distance != null ? `${(u.distance / 1000).toFixed(1)}km away` : 'Nearby'}
+                <div className="flex flex-col">
+                  {nearbyUsers.slice(0, 5).map(u => {
+                    const p         = sidebarProfiles[u.userId];
+                    const name      = p?.firstName
+                      ? `${p.firstName}${p.lastName ? ' ' + p.lastName : ''}`
+                      : u.userId.slice(0, 10) + '…';
+                    const initial   = (p?.firstName || u.userId).charAt(0).toUpperCase();
+                    const isFriend  = addedFriends.has(u.userId);
+                    const isAdding  = addingId === u.userId;
+
+                    return (
+                      <div key={u.userId} className="flex items-center gap-3 py-3 border-b border-white/40 last:border-0">
+                        {/* Avatar */}
+                        <div className="relative flex-shrink-0">
+                          {p?.photos?.[0] ? (
+                            <img
+                              src={p.photos[0]}
+                              alt={name}
+                              className="w-9 h-9 rounded-full object-cover border-2 border-white"
+                            />
+                          ) : (
+                            <div
+                              className={`w-9 h-9 rounded-full bg-gradient-to-br ${avatarGradient(u.userId)} flex items-center justify-center text-white text-sm font-bold border-2 border-white`}
+                            >
+                              {initial}
+                            </div>
+                          )}
+                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-white" />
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-800 truncate">{name}</p>
+                          <p className="text-xs text-slate-400">
+                            {u.distance != null
+                              ? `${(u.distance / 1000).toFixed(1)}km away`
+                              : 'Nearby'}
+                          </p>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex flex-col gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => p && setChatTarget(p)}
+                            disabled={!p}
+                            className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-semibold transition-colors disabled:opacity-50"
+                            style={{ minHeight: 26 }}
+                          >
+                            <MessageCircle size={11} /> Chat
+                          </button>
+                          <button
+                            onClick={() => !isFriend && handleAddFriend(u.userId)}
+                            disabled={isFriend || isAdding}
+                            className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg font-semibold transition-colors ${
+                              isFriend
+                                ? 'bg-emerald-50 text-emerald-600'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                            style={{ minHeight: 26 }}
+                          >
+                            {isAdding
+                              ? '…'
+                              : isFriend
+                                ? <><Check size={11} /> Friend</>
+                                : <><UserPlus size={11} /> Add</>}
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexShrink: 0 }}>
-                      <button
-                        className="btn btn-sm btn-primary"
-                        style={{ fontSize: '11px', padding: '3px 8px', width: 'auto' }}
-                        onClick={() => p && setChatTarget(p)}
-                        disabled={!p}
-                      >
-                        💬 Chat
-                      </button>
-                      <button
-                        className={`btn btn-sm ${isFriend ? 'btn-secondary' : 'btn-outline'}`}
-                        style={{ fontSize: '11px', padding: '3px 8px' }}
-                        onClick={() => !isFriend && handleAddFriend(u.userId)}
-                        disabled={isFriend || isAdding}
-                      >
-                        {isAdding ? '…' : isFriend ? '✓ Friend' : '+ Add'}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
         </div>
       </div>
 
+      {/* ── Modals ── */}
       {chatTarget && (
         <ChatModal targetUser={chatTarget} onClose={() => setChatTarget(null)} />
       )}
 
       {nearbyModal && (
-        <div className="modal-overlay" onClick={() => setNearbyModal(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(15,10,40,0.45)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+          onClick={() => setNearbyModal(false)}
+        >
           <div
-            className="modal"
+            className="glass-strong rounded-3xl w-full max-w-lg flex flex-col overflow-hidden"
+            style={{ maxHeight: '80vh' }}
             onClick={e => e.stopPropagation()}
-            style={{ padding: 0, display: 'flex', flexDirection: 'column', maxHeight: '80vh', width: '600px' }}
           >
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '14px 16px', borderBottom: '1px solid var(--ig-border)',
-            }}>
-              <span style={{ fontWeight: 700, fontSize: '16px' }}>📍 Nearby Users</span>
-              <button className="modal-close" onClick={() => setNearbyModal(false)}>✕</button>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/40">
+              <span className="font-semibold text-slate-800 flex items-center gap-2">
+                <MapPin size={16} className="text-indigo-500" /> Nearby Users
+              </span>
+              <button
+                className="btn-icon w-8 h-8 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100/60"
+                onClick={() => setNearbyModal(false)}
+                aria-label="Close"
+              >
+                <X size={15} />
+              </button>
             </div>
-            <div style={{ overflowY: 'auto', flex: 1 }}>
+            <div className="overflow-y-auto flex-1">
               <NearbyUsers />
             </div>
           </div>

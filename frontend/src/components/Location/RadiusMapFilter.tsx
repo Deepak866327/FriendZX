@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import { Map, Satellite } from 'lucide-react';
 import { useLocation } from '@/hooks/useLocation';
 
 const TILES = {
@@ -9,7 +10,7 @@ const TILES = {
   },
   satellite: {
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, GIS User Community',
+    attribution: 'Tiles &copy; Esri',
   },
   labels: {
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
@@ -18,10 +19,10 @@ const TILES = {
 };
 
 const STREET_STYLE: L.CircleMarkerOptions = {
-  color: '#0095f6', fillColor: '#0095f6', fillOpacity: 0.12, weight: 2, dashArray: '6 4',
+  color: '#6366f1', fillColor: '#6366f1', fillOpacity: 0.10, weight: 2, dashArray: '6 4',
 };
 const SAT_STYLE: L.CircleMarkerOptions = {
-  color: '#00d4ff', fillColor: '#00d4ff', fillOpacity: 0.15, weight: 2.5, dashArray: '6 4',
+  color: '#38bdf8', fillColor: '#38bdf8', fillOpacity: 0.12, weight: 2.5, dashArray: '6 4',
 };
 
 function formatRadius(r: number): string {
@@ -37,54 +38,42 @@ interface Props {
 export const RadiusMapFilter: React.FC<Props> = ({ radius, onRadiusChange }) => {
   const { currentLocation } = useLocation();
   const [isSatellite, setIsSatellite] = useState(false);
-  // Browser geolocation fetched once on open (independent of tracking state)
-  const [browserLat, setBrowserLat] = useState<number | null>(null);
-  const [browserLng, setBrowserLng] = useState<number | null>(null);
+  const [browserLat,  setBrowserLat]  = useState<number | null>(null);
+  const [browserLng,  setBrowserLng]  = useState<number | null>(null);
 
-  const mapDivRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const tileRef = useRef<L.TileLayer | null>(null);
-  const labelsRef = useRef<L.TileLayer | null>(null);
-  const circleRef = useRef<L.Circle | null>(null);
-  const markerRef = useRef<L.Marker | null>(null);
+  const mapDivRef  = useRef<HTMLDivElement>(null);
+  const mapRef     = useRef<L.Map | null>(null);
+  const tileRef    = useRef<L.TileLayer | null>(null);
+  const labelsRef  = useRef<L.TileLayer | null>(null);
+  const circleRef  = useRef<L.Circle | null>(null);
+  const markerRef  = useRef<L.Marker | null>(null);
 
-  // Priority: active tracking location > browser geolocation > world default
   const lat = currentLocation?.coordinates.latitude ?? browserLat ?? 20.5937;
   const lng = currentLocation?.coordinates.longitude ?? browserLng ?? 78.9629;
   const hasLocation = !!(currentLocation || browserLat !== null);
-  const locationLabel = currentLocation
-    ? 'Live position'
-    : browserLat !== null
-    ? 'Your location'
-    : 'Default center';
+  const locationLabel = currentLocation ? 'Live position' : browserLat !== null ? 'Your location' : 'Default center';
 
   const pct = ((radius - 5) / (5000 - 5)) * 100;
 
-  // Request browser geolocation once when the map opens
   useEffect(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setBrowserLat(pos.coords.latitude);
-        setBrowserLng(pos.coords.longitude);
-      },
-      () => { /* silently keep world default */ },
-      { timeout: 8000, maximumAge: 300000 }
+      pos => { setBrowserLat(pos.coords.latitude); setBrowserLng(pos.coords.longitude); },
+      () => {},
+      { timeout: 8000, maximumAge: 300000 },
     );
   }, []);
 
-  // Initialize map once on mount
   useEffect(() => {
     if (!mapDivRef.current) return;
-
     const map = L.map(mapDivRef.current, { center: [lat, lng], zoom: 14 });
     mapRef.current = map;
 
     const icon = L.divIcon({
       className: '',
-      html: `<div style="width:16px;height:16px;border-radius:50%;background:#0095f6;border:3px solid #fff;box-shadow:0 0 0 2px #0095f6,0 2px 8px rgba(0,149,246,0.5)"></div>`,
-      iconSize: [16, 16],
-      iconAnchor: [8, 8],
+      html: `<div style="width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);border:2.5px solid #fff;box-shadow:0 0 0 3px rgba(99,102,241,0.30),0 2px 8px rgba(99,102,241,0.40)"></div>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
     });
     markerRef.current = L.marker([lat, lng], { icon }).addTo(map).bindPopup('You are here');
 
@@ -102,30 +91,23 @@ export const RadiusMapFilter: React.FC<Props> = ({ radius, onRadiusChange }) => 
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Swap tile layers when satellite mode changes
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-
     if (tileRef.current) map.removeLayer(tileRef.current);
     if (labelsRef.current) { map.removeLayer(labelsRef.current); labelsRef.current = null; }
-
     const cfg = isSatellite ? TILES.satellite : TILES.street;
     tileRef.current = L.tileLayer(cfg.url, { attribution: cfg.attribution }).addTo(map);
-
     if (isSatellite) {
       labelsRef.current = L.tileLayer(TILES.labels.url, { attribution: '' }).addTo(map);
     }
-
     circleRef.current?.setStyle(isSatellite ? SAT_STYLE : STREET_STYLE);
   }, [isSatellite]);
 
-  // Update marker, circle, and view when position or radius changes
   useEffect(() => {
     const map = mapRef.current;
     const circle = circleRef.current;
     if (!map || !circle) return;
-
     const latlng: L.LatLngExpression = [lat, lng];
     markerRef.current?.setLatLng(latlng);
     circle.setLatLng(latlng);
@@ -134,66 +116,83 @@ export const RadiusMapFilter: React.FC<Props> = ({ radius, onRadiusChange }) => 
   }, [lat, lng, radius]);
 
   return (
-    <div className="radius-map-filter">
+    <div className="flex flex-col gap-4">
 
-      {/* Slider */}
-      <div className="rmf-slider-section">
-        <div className="rmf-slider-header">
-          <span className="rmf-label">Search Radius</span>
-          <span className="rmf-value">{formatRadius(radius)}</span>
+      {/* ── Radius slider card ── */}
+      <div className="glass rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm font-semibold text-slate-700">Search radius</span>
+          <span
+            className="text-sm font-bold px-2.5 py-1 rounded-lg text-white"
+            style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}
+          >
+            {formatRadius(radius)}
+          </span>
         </div>
-        <div className="rmf-slider-wrap">
-          <input
-            type="range"
-            min={5}
-            max={5000}
-            step={5}
-            value={radius}
-            onChange={e => onRadiusChange(Number(e.target.value))}
-            className="rmf-slider"
-            style={{ '--pct': `${pct}%` } as React.CSSProperties}
-          />
-        </div>
-        <div className="rmf-bounds">
+
+        <input
+          type="range"
+          min={5}
+          max={5000}
+          step={5}
+          value={radius}
+          onChange={e => onRadiusChange(Number(e.target.value))}
+          className="fx-slider"
+          style={{ '--pct': `${pct}%` } as React.CSSProperties}
+        />
+
+        <div className="flex justify-between text-[10px] text-slate-400 mt-2 font-medium">
           <span>5 m</span>
-          <div className="rmf-tick-labels">
-            <span>1 km</span>
-            <span>2.5 km</span>
-            <span>5 km</span>
-          </div>
+          <span>1 km</span>
+          <span>2.5 km</span>
+          <span>5 km</span>
         </div>
       </div>
 
-      {/* Map */}
-      <div className="rmf-map-wrap">
-        {!hasLocation && (
-          <div className="rmf-no-location">
-            <p>📍 Allow location access to center the map on you</p>
-          </div>
-        )}
+      {/* ── Map card ── */}
+      <div className="glass rounded-2xl overflow-hidden">
+        {/* Layer toggle */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/40">
+          {!hasLocation && (
+            <p className="text-xs text-slate-400 flex items-center gap-1.5">
+              <span className="w-4 h-4 rounded-full border border-amber-300 bg-amber-50 flex items-center justify-center text-[9px]">!</span>
+              Allow location access to center the map
+            </p>
+          )}
+          {hasLocation && (
+            <p className="text-xs text-slate-400">
+              {locationLabel}
+            </p>
+          )}
 
-        <div className="rmf-layer-toggle">
-          <button
-            className={`rmf-layer-btn ${!isSatellite ? 'active' : ''}`}
-            onClick={() => setIsSatellite(false)}
-          >
-            🗺 Street
-          </button>
-          <button
-            className={`rmf-layer-btn ${isSatellite ? 'active' : ''}`}
-            onClick={() => setIsSatellite(true)}
-          >
-            🛰 Satellite
-          </button>
+          <div className="flex items-center gap-1 ml-auto glass rounded-lg p-0.5">
+            <button
+              onClick={() => setIsSatellite(false)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                !isSatellite ? 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Map size={11} /> Street
+            </button>
+            <button
+              onClick={() => setIsSatellite(true)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                isSatellite ? 'bg-gradient-to-r from-sky-400 to-blue-500 text-white' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Satellite size={11} /> Satellite
+            </button>
+          </div>
         </div>
 
-        <div
-          ref={mapDivRef}
-          style={{ height: '320px', width: '100%', borderRadius: '12px' }}
-        />
+        {/* Map */}
+        <div ref={mapDivRef} style={{ height: 340, width: '100%' }} />
 
-        <div className="rmf-map-badge">
-          {formatRadius(radius)} radius · {locationLabel}
+        {/* Badge */}
+        <div className="px-4 py-2.5 border-t border-white/40 flex items-center justify-between">
+          <span className="text-xs text-slate-500">
+            {formatRadius(radius)} radius · {locationLabel}
+          </span>
         </div>
       </div>
     </div>

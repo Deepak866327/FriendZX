@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { FileText } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Post, FeedPage } from '@/services/postService';
 import { PostCard } from './PostCard';
 import { SkeletonCard } from './SkeletonCard';
+import { feedItemVariants } from '@/utils/animations';
 
 type Fetcher = (cursor?: string, limit?: number) => Promise<FeedPage>;
 
@@ -46,7 +49,6 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     }
   }, [fetcher, cursor, hasMore]);
 
-  // Initial load + refresh
   useEffect(() => {
     setPosts([]);
     setCursor(undefined);
@@ -54,7 +56,6 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     load(true);
   }, [refreshKey, fetcher]);
 
-  // Intersection observer for infinite scroll
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
@@ -66,23 +67,41 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     return () => obs.disconnect();
   }, [load]);
 
-  const handleDelete = (id: string) => setPosts(prev => prev.filter(p => p.id !== id));
+  const handleDelete     = (id: string) => setPosts(prev => prev.filter(p => p.id !== id));
   const handleLikeChange = (updated: Post) =>
     setPosts(prev => prev.map(p => p.id === updated.id ? updated : p));
 
   if (!loading && !error && posts.length === 0) {
-    return <p className="feed-empty">{emptyText}</p>;
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22 }}
+        className="glass rounded-2xl p-10 flex flex-col items-center gap-3 text-slate-400 mt-4"
+      >
+        <div className="w-12 h-12 rounded-2xl bg-white/60 flex items-center justify-center">
+          <FileText size={22} className="text-indigo-300" />
+        </div>
+        <p className="text-sm font-medium">{emptyText}</p>
+      </motion.div>
+    );
   }
 
   return (
-    <div className="post-feed">
+    <div>
       {posts.map(post => (
-        <PostCard
+        <motion.div
           key={post.id}
-          post={post}
-          onDelete={handleDelete}
-          onLikeChange={handleLikeChange}
-        />
+          variants={feedItemVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <PostCard
+            post={post}
+            onDelete={handleDelete}
+            onLikeChange={handleLikeChange}
+          />
+        </motion.div>
       ))}
 
       {loading && (
@@ -92,12 +111,16 @@ export const PostFeed: React.FC<PostFeedProps> = ({
         </>
       )}
 
-      {error && <p className="feed-error">{error}</p>}
+      {error && (
+        <div className="glass rounded-2xl px-4 py-3 text-sm text-red-500 text-center mt-2">
+          {error}
+        </div>
+      )}
 
       {!loading && hasMore && <div ref={sentinelRef} style={{ height: 1 }} />}
 
       {!hasMore && posts.length > 0 && (
-        <p className="feed-end">You're all caught up</p>
+        <p className="text-center text-xs text-slate-400 py-6">You're all caught up</p>
       )}
     </div>
   );

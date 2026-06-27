@@ -25,8 +25,19 @@ export class AuthController {
         return res.status(400).json({ error: 'Username/email and password are required' });
       }
 
-      const result = await this.loginUseCase.execute({ identifier, password });
-      res.json(result);
+      const { token, refreshToken, user } = await this.loginUseCase.execute({ identifier, password });
+
+      // Refresh token goes in an HttpOnly cookie — JS cannot read it, eliminating XSS token theft.
+      // Access token is returned in the body and kept only in JS memory by the client.
+      res.cookie('refresh_token', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        path: '/',
+      });
+
+      res.json({ token, user });
     } catch (error) {
       logger.error(`Login error: ${(error as Error).message}`);
       res.status(401).json({ error: (error as Error).message });
@@ -72,9 +83,19 @@ export class AuthController {
     try {
       const result = req.user as any;
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+      // Set the refresh token as an HttpOnly cookie (same rules as login)
+      res.cookie('refresh_token', result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: '/',
+      });
+
+      // Only access token + user in the redirect URL — refresh token never touches the URL
       const params = new URLSearchParams({
         token: result.token,
-        refreshToken: result.refreshToken,
         user: JSON.stringify(result.user),
       });
       res.redirect(`${frontendUrl}/auth/callback?${params}`);
@@ -113,6 +134,8 @@ export class AuthController {
 
   async logout(req: Request, res: Response) {
     try {
+      // Clear the HttpOnly refresh token cookie server-side
+      res.clearCookie('refresh_token', { path: '/' });
       res.json({ message: 'Logged out successfully' });
     } catch (error) {
       logger.error(`Logout error: ${(error as Error).message}`);

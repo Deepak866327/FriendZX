@@ -1,5 +1,4 @@
-import { apiClient } from './api';
-import { storage } from '@/utils/storage';
+import { apiClient, getApiToken } from './api';
 
 export interface Story {
   id: string;
@@ -53,7 +52,7 @@ export const storyService = {
       if (payload.longitude != null)    form.append('longitude',    String(payload.longitude));
 
       const xhr = new XMLHttpRequest();
-      const token = storage.getToken() || '';
+      const token = getApiToken() || '';
       xhr.open('POST', '/api/posts/stories');
       if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress?.(Math.round(e.loaded / e.total * 100)); };

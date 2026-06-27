@@ -1,6 +1,6 @@
 // End-to-end encryption for chat using Web Crypto API
 // Key exchange: ECDH P-256  |  Message encryption: AES-GCM 256-bit
-// Private keys never leave the browser (stored in localStorage as JWK)
+// Private keys never leave the browser (stored in sessionStorage as JWK)
 
 const ECDH = { name: 'ECDH', namedCurve: 'P-256' } as const;
 const AES  = { name: 'AES-GCM', length: 256 }      as const;
@@ -8,11 +8,11 @@ const AES  = { name: 'AES-GCM', length: 256 }      as const;
 const LS_PRIV = 'chat_ecdh_private';
 const LS_PUB  = 'chat_ecdh_public';
 
-// ── Key pair (generate once, persist in localStorage) ─────────────────────
+// ── Key pair (generate once, persist in sessionStorage per tab/user) ───────
 
 export async function getOrCreateKeyPair(): Promise<CryptoKeyPair> {
-  const privJwkRaw = localStorage.getItem(LS_PRIV);
-  const pubJwkRaw  = localStorage.getItem(LS_PUB);
+  const privJwkRaw = sessionStorage.getItem(LS_PRIV);
+  const pubJwkRaw  = sessionStorage.getItem(LS_PUB);
 
   if (privJwkRaw && pubJwkRaw) {
     const privateKey = await crypto.subtle.importKey('jwk', JSON.parse(privJwkRaw), ECDH, true, ['deriveKey']);
@@ -23,8 +23,8 @@ export async function getOrCreateKeyPair(): Promise<CryptoKeyPair> {
   const pair = await crypto.subtle.generateKey(ECDH, true, ['deriveKey']);
   const privJwk = await crypto.subtle.exportKey('jwk', pair.privateKey);
   const pubJwk  = await crypto.subtle.exportKey('jwk', pair.publicKey);
-  localStorage.setItem(LS_PRIV, JSON.stringify(privJwk));
-  localStorage.setItem(LS_PUB,  JSON.stringify(pubJwk));
+  sessionStorage.setItem(LS_PRIV, JSON.stringify(privJwk));
+  sessionStorage.setItem(LS_PUB,  JSON.stringify(pubJwk));
   return pair;
 }
 
